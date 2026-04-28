@@ -47,7 +47,13 @@ ClientController::ClientController(QObject* parent) : QObject(parent) {
     applog::write(applog::Role::Client, text);
   });
   connect(m_worker, &TcpClientWorker::connected, this, &ClientController::stateChanged);
-  connect(m_worker, &TcpClientWorker::connected, this, [](bool ok, const QString& reason) {
+  connect(m_worker, &TcpClientWorker::connected, this, [this](bool ok, const QString& reason) {
+    if (!ok &&
+        (reason.contains(QStringLiteral("验证码错误")) || reason.contains(QStringLiteral("校验失败")))) {
+      // 验证码不匹配属于明确配置错误，不应继续自动重连打扰用户。
+      m_autoReconnect = false;
+      m_reconnectTimer.stop();
+    }
     applog::write(applog::Role::Client,
                   ok ? QStringLiteral("连接握手成功：%1").arg(reason)
                      : QStringLiteral("连接握手失败：%1").arg(reason));
@@ -89,6 +95,7 @@ ClientController::~ClientController() {
 }
 
 void ClientController::startConnect(const QString& ip, quint16 port, const QString& code, rdqt::QualityPreset preset) {
+  m_autoReconnect = true;
   m_userInitiatedDisconnect = false;
   m_reconnectTimer.stop();
   m_currentFrame = QImage();
@@ -112,6 +119,7 @@ void ClientController::startConnect(const QString& ip, quint16 port, const QStri
 
 void ClientController::stopConnect() {
   m_userInitiatedDisconnect = true;
+  m_autoReconnect = false;
   m_reconnectTimer.stop();
   applog::write(applog::Role::Client, QStringLiteral("收到断开连接请求"));
   QMetaObject::invokeMethod(m_worker, [this]() { m_worker->disconnectHost(); }, Qt::QueuedConnection);

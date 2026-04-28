@@ -43,12 +43,17 @@ void MainWindow::setupUi() {
   root->setContentsMargins(4, 4, 4, 4);
   root->setSpacing(12);
 
-  auto* leftPanel = new QWidget(center);
-  leftPanel->setFixedWidth(380);
-  auto* leftLayout = new QVBoxLayout(leftPanel);
+  m_leftPanelHost = new QWidget(content);
+  auto* leftHostLayout = new QHBoxLayout(m_leftPanelHost);
+  leftHostLayout->setContentsMargins(0, 0, 0, 0);
+  leftHostLayout->setSpacing(8);
+
+  m_leftPanel = new QWidget(m_leftPanelHost);
+  m_leftPanel->setFixedWidth(380);
+  auto* leftLayout = new QVBoxLayout(m_leftPanel);
   leftLayout->setSpacing(10);
 
-  auto* modeBox = new QGroupBox(QStringLiteral("运行模式"), leftPanel);
+  auto* modeBox = new QGroupBox(QStringLiteral("运行模式"), m_leftPanel);
   auto* modeLayout = new QHBoxLayout(modeBox);
   m_modeServer = new QRadioButton(QStringLiteral("服务端"), modeBox);
   m_modeClient = new QRadioButton(QStringLiteral("客户端"), modeBox);
@@ -56,7 +61,7 @@ void MainWindow::setupUi() {
   modeLayout->addWidget(m_modeServer);
   modeLayout->addWidget(m_modeClient);
 
-  auto* serverBox = new QGroupBox(QStringLiteral("服务端设置"), leftPanel);
+  auto* serverBox = new QGroupBox(QStringLiteral("服务端设置"), m_leftPanel);
   auto* serverLayout = new QFormLayout(serverBox);
   m_serverPortEdit = new QLineEdit(QStringLiteral("5555"), serverBox);
   m_verifyCodeLabel = new QLabel(QStringLiteral("未启动"), serverBox);
@@ -67,7 +72,7 @@ void MainWindow::setupUi() {
   serverLayout->addRow(m_startServerBtn);
   serverLayout->addRow(m_stopServerBtn);
 
-  auto* clientBox = new QGroupBox(QStringLiteral("客户端连接"), leftPanel);
+  auto* clientBox = new QGroupBox(QStringLiteral("客户端连接"), m_leftPanel);
   auto* clientLayout = new QFormLayout(clientBox);
   m_clientIpEdit = new QLineEdit(QStringLiteral("127.0.0.1"), clientBox);
   m_clientPortEdit = new QLineEdit(QStringLiteral("5555"), clientBox);
@@ -95,7 +100,7 @@ void MainWindow::setupUi() {
   clientLayout->addRow(m_disconnectBtn);
   clientLayout->addRow(m_controlModeBtn);
 
-  auto* logBox = new QGroupBox(QStringLiteral("运行日志"), leftPanel);
+  auto* logBox = new QGroupBox(QStringLiteral("运行日志"), m_leftPanel);
   auto* logLayout = new QVBoxLayout(logBox);
   m_qosServerLabel = new QLabel(QStringLiteral("服务端 QoS: FPS=0, 码率=0 kbps, JPEG=0"), logBox);
   m_qosClientLabel = new QLabel(QStringLiteral("客户端 QoS: FPS=0, 码率=0 kbps, 重连=0, 延迟=-ms, 分辨率=-"), logBox);
@@ -110,6 +115,15 @@ void MainWindow::setupUi() {
   leftLayout->addWidget(clientBox);
   leftLayout->addWidget(logBox, 1);
 
+  m_leftPanelToggleBtn = new QPushButton(QStringLiteral("◀"), m_leftPanelHost);
+  m_leftPanelToggleBtn->setObjectName(QStringLiteral("leftPanelToggleBtn"));
+  m_leftPanelToggleBtn->setFixedWidth(28);
+  m_leftPanelToggleBtn->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
+  m_leftPanelToggleBtn->setToolTip(QStringLiteral("收起左侧控制栏"));
+
+  leftHostLayout->addWidget(m_leftPanel);
+  leftHostLayout->addWidget(m_leftPanelToggleBtn);
+
   m_remoteDesktopBox = new QGroupBox(QStringLiteral("远程桌面"), center);
   auto* rightLayout = new QVBoxLayout(m_remoteDesktopBox);
   m_renderStack = new QStackedWidget(m_remoteDesktopBox);
@@ -122,7 +136,7 @@ void MainWindow::setupUi() {
   m_renderStack->setCurrentWidget(m_videoWidget);
   rightLayout->addWidget(m_renderStack, 1);
 
-  root->addWidget(leftPanel);
+  root->addWidget(m_leftPanelHost);
   root->addWidget(m_remoteDesktopBox, 1);
 }
 
@@ -137,6 +151,17 @@ void MainWindow::bindEvents() {
     m_titleBar->setMaximized(isMaximized());
   });
   connect(m_titleBar, &TitleBar::closeRequested, this, [this]() { close(); });
+  connect(m_leftPanelToggleBtn, &QPushButton::clicked, this, [this]() {
+    m_leftPanelCollapsed = !m_leftPanelCollapsed;
+    if (m_leftPanel) {
+      m_leftPanel->setVisible(!m_leftPanelCollapsed);
+    }
+    if (m_leftPanelToggleBtn) {
+      m_leftPanelToggleBtn->setText(m_leftPanelCollapsed ? QStringLiteral("▶") : QStringLiteral("◀"));
+      m_leftPanelToggleBtn->setToolTip(m_leftPanelCollapsed ? QStringLiteral("展开左侧控制栏")
+                                                            : QStringLiteral("收起左侧控制栏"));
+    }
+  });
 
   connect(&m_serverController, &ServerController::appendLog, this, &MainWindow::appendLog);
   connect(&m_clientController, &ClientController::appendLog, this, &MainWindow::appendLog);
@@ -207,6 +232,10 @@ void MainWindow::bindEvents() {
   connect(&m_clientController, &ClientController::stateChanged, this, [this](bool ok, const QString& reason) {
     m_clientConnected = ok;
     m_controlModeBtn->setEnabled(m_modeClient->isChecked() && m_clientConnected);
+    // 连接成功后禁用“连接”，仅允许“断开”；断开后恢复。
+    const bool inClientMode = m_modeClient->isChecked();
+    m_connectBtn->setEnabled(inClientMode && !m_clientConnected);
+    m_disconnectBtn->setEnabled(inClientMode && m_clientConnected);
     if (ok) {
       // 连接成功后默认开启可控模式，避免“已连接但输入未回传”的误解。
       m_remoteControlEnabled = true;
@@ -263,13 +292,23 @@ void MainWindow::bindEvents() {
     m_clientPortEdit->setEnabled(!isServer);
     m_clientCodeEdit->setEnabled(!isServer);
     m_qualityBox->setEnabled(!isServer);
-    m_connectBtn->setEnabled(!isServer);
-    m_disconnectBtn->setEnabled(!isServer);
+    m_connectBtn->setEnabled(!isServer && !m_clientConnected);
+    m_disconnectBtn->setEnabled(!isServer && m_clientConnected);
     m_controlModeBtn->setEnabled(!isServer && m_clientConnected);
 
     // 服务端模式不需要本地显示远程桌面，仅客户端模式显示右侧画面区域。
     m_remoteDesktopBox->setVisible(!isServer);
+    if (m_leftPanelToggleBtn) {
+      m_leftPanelToggleBtn->setVisible(!isServer);
+    }
     if (isServer) {
+      m_leftPanelCollapsed = false;
+      if (m_leftPanel) {
+        m_leftPanel->setVisible(true);
+      }
+      if (m_leftPanelToggleBtn) {
+        m_leftPanelToggleBtn->setText(QStringLiteral("◀"));
+      }
       m_videoWidget->clearFrame();
       m_softwareWidget->clearFrame();
       m_clientConnected = false;
@@ -281,6 +320,11 @@ void MainWindow::bindEvents() {
     if (m_titleBar) {
       m_titleBar->setMaximizeEnabled(!isServer);
       m_titleBar->setMaximized(isMaximized());
+    }
+    if (!isServer && m_leftPanelToggleBtn) {
+      m_leftPanelToggleBtn->setText(m_leftPanelCollapsed ? QStringLiteral("▶") : QStringLiteral("◀"));
+      m_leftPanelToggleBtn->setToolTip(m_leftPanelCollapsed ? QStringLiteral("展开左侧控制栏")
+                                                            : QStringLiteral("收起左侧控制栏"));
     }
   };
   connect(m_modeServer, &QRadioButton::toggled, this, [toggleMode]() { toggleMode(); });

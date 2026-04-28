@@ -15,6 +15,7 @@
 #include <QSize>
 #include <QStackedWidget>
 #include <QTextEdit>
+#include <QWidget>
 
 class TitleBar;
 
@@ -35,6 +36,9 @@ private:
   ClientController m_clientController;
 
   TitleBar* m_titleBar = nullptr;
+  QWidget* m_leftPanel = nullptr;
+  QWidget* m_leftPanelHost = nullptr;
+  QPushButton* m_leftPanelToggleBtn = nullptr;
 
   QRadioButton* m_modeServer = nullptr;
   QRadioButton* m_modeClient = nullptr;
@@ -63,4 +67,5 @@ private:
   bool m_clientConnected = false;
   bool m_remoteControlEnabled = false;
   bool m_isLoopbackTarget = false;
+  bool m_leftPanelCollapsed = false;
 };
