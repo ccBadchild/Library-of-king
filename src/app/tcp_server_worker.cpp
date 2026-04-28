@@ -167,6 +167,10 @@ void TcpServerWorker::ensureServerCreated() {
 }
 
 void TcpServerWorker::applyRemoteInput(const QByteArray& body) {
+  ++m_inputRecvCount;
+  if (m_inputRecvCount % 200 == 0) {
+    emit logMessage(QStringLiteral("输入事件已接收累计=%1").arg(m_inputRecvCount));
+  }
   QDataStream ds(body);
   ds.setVersion(QDataStream::Qt_5_15);
 

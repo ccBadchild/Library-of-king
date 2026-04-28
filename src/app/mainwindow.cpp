@@ -1,5 +1,6 @@
 #include "mainwindow.h"
 #include "app_logger.h"
+#include "title_bar.h"
 
 #include <QDateTime>
 #include <QFormLayout>
@@ -21,11 +22,25 @@ void MainWindow::setupUi() {
   setWindowTitle(QStringLiteral("远程桌面控制中心"));
   resize(1300, 820);
 
+  // 去除系统标题栏，使用自定义标题栏。
+  setWindowFlags(Qt::Window | Qt::FramelessWindowHint);
+
   auto* center = new QWidget(this);
   setCentralWidget(center);
 
-  auto* root = new QHBoxLayout(center);
-  root->setContentsMargins(12, 12, 12, 12);
+  auto* outer = new QVBoxLayout(center);
+  outer->setContentsMargins(8, 8, 8, 8);
+  outer->setSpacing(8);
+
+  m_titleBar = new TitleBar(center);
+  m_titleBar->setTitleText(windowTitle());
+  outer->addWidget(m_titleBar);
+
+  auto* content = new QWidget(center);
+  outer->addWidget(content, 1);
+
+  auto* root = new QHBoxLayout(content);
+  root->setContentsMargins(4, 4, 4, 4);
   root->setSpacing(12);
 
   auto* leftPanel = new QWidget(center);
@@ -100,10 +115,8 @@ void MainWindow::setupUi() {
   m_renderStack = new QStackedWidget(m_remoteDesktopBox);
   m_videoWidget = new VideoRenderWidget(m_remoteDesktopBox);
   m_videoWidget->setMinimumSize(800, 600);
-  m_videoWidget->setStyleSheet("background:#111;");
   m_softwareWidget = new SoftwareRenderWidget(m_remoteDesktopBox);
   m_softwareWidget->setMinimumSize(800, 600);
-  m_softwareWidget->setStyleSheet("background:#111;");
   m_renderStack->addWidget(m_videoWidget);
   m_renderStack->addWidget(m_softwareWidget);
   m_renderStack->setCurrentWidget(m_videoWidget);
@@ -111,17 +124,20 @@ void MainWindow::setupUi() {
 
   root->addWidget(leftPanel);
   root->addWidget(m_remoteDesktopBox, 1);
-
-  // 参考 TeamViewer 的蓝白配色，保持简洁可用。
-  setStyleSheet(
-      "QMainWindow{background:#f4f8ff;}"
-      "QGroupBox{font-weight:bold;border:1px solid #cddbf7;border-radius:6px;margin-top:8px;padding-top:8px;}"
-      "QGroupBox::title{subcontrol-origin:margin;left:10px;padding:0 6px;}"
-      "QPushButton{background:#0a6dff;color:white;border:none;padding:6px 10px;border-radius:4px;}"
-      "QPushButton:hover{background:#0558d3;}");
 }
 
 void MainWindow::bindEvents() {
+  connect(m_titleBar, &TitleBar::minimizeRequested, this, [this]() { showMinimized(); });
+  connect(m_titleBar, &TitleBar::maximizeRestoreRequested, this, [this]() {
+    if (isMaximized()) {
+      showNormal();
+    } else {
+      showMaximized();
+    }
+    m_titleBar->setMaximized(isMaximized());
+  });
+  connect(m_titleBar, &TitleBar::closeRequested, this, [this]() { close(); });
+
   connect(&m_serverController, &ServerController::appendLog, this, &MainWindow::appendLog);
   connect(&m_clientController, &ClientController::appendLog, this, &MainWindow::appendLog);
 
@@ -173,11 +189,7 @@ void MainWindow::bindEvents() {
   });
   connect(m_controlModeBtn, &QPushButton::toggled, this, [this](bool checked) {
     m_remoteControlEnabled = checked;
-    if (checked && m_isLoopbackTarget) {
-      m_controlModeBtn->setText(QStringLiteral("可控模式(仅键盘)"));
-    } else {
-      m_controlModeBtn->setText(checked ? QStringLiteral("可控模式") : QStringLiteral("只看模式"));
-    }
+    m_controlModeBtn->setText(checked ? QStringLiteral("可控模式") : QStringLiteral("只看模式"));
   });
 
   connect(&m_clientController, &ClientController::frameUpdated, this, [this](const QImage& image) {
@@ -261,8 +273,15 @@ void MainWindow::bindEvents() {
       m_videoWidget->clearFrame();
       m_softwareWidget->clearFrame();
       m_clientConnected = false;
+      if (isMaximized()) {
+        showNormal();
+      }
     }
     updateWindowSizeByMode(isServer);
+    if (m_titleBar) {
+      m_titleBar->setMaximizeEnabled(!isServer);
+      m_titleBar->setMaximized(isMaximized());
+    }
   };
   connect(m_modeServer, &QRadioButton::toggled, this, [toggleMode]() { toggleMode(); });
   toggleMode();

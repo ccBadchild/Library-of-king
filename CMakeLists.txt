@@ -24,6 +24,8 @@ add_executable(RemoteControl
   src/app/main.cpp
   src/app/app_logger.cpp
   src/app/mainwindow.cpp
+  src/app/resources.qrc
+  src/app/title_bar.cpp
   src/app/video_render_widget.cpp
   src/app/software_render_widget.cpp
   src/app/server_controller.cpp
@@ -32,6 +34,7 @@ add_executable(RemoteControl
   src/app/tcp_server_worker.cpp
   src/app/tcp_client_worker.cpp
   src/app/mainwindow.h
+  src/app/title_bar.h
   src/app/video_render_widget.h
   src/app/software_render_widget.h
   src/app/server_controller.h

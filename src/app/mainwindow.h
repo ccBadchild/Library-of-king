@@ -16,6 +16,8 @@
 #include <QStackedWidget>
 #include <QTextEdit>
 
+class TitleBar;
+
 class MainWindow : public QMainWindow {
   Q_OBJECT
 public:
@@ -31,6 +33,8 @@ private:
 private:
   ServerController m_serverController;
   ClientController m_clientController;
+
+  TitleBar* m_titleBar = nullptr;
 
   QRadioButton* m_modeServer = nullptr;
   QRadioButton* m_modeClient = nullptr;

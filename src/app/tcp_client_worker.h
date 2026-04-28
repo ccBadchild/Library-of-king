@@ -37,4 +37,5 @@ private:
   QTcpSocket* m_socket = nullptr;
   QByteArray m_readBuffer;
   bool m_waitingAck = false;
+  quint64 m_inputSentCount = 0;
 };

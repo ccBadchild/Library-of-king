@@ -42,6 +42,10 @@ void TcpClientWorker::sendInputEvent(const rdqt::RemoteInputEvent& event) {
     return;
   }
   m_socket->write(rdqt::packMessage(rdqt::MessageType::InputEvent, rdqt::makeInputEventPayload(event)));
+  ++m_inputSentCount;
+  if (m_inputSentCount % 200 == 0) {
+    emit logMessage(QStringLiteral("输入事件已发送累计=%1").arg(m_inputSentCount));
+  }
 }
 
 void TcpClientWorker::sendPing(qint64 clientTsMs) {

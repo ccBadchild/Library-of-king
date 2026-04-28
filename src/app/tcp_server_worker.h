@@ -38,4 +38,5 @@ private:
   QByteArray m_readBuffer;
   QString m_verifyCode;
   bool m_clientVerified = false;
+  quint64 m_inputRecvCount = 0;
 };
