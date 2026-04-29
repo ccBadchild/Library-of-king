@@ -30,6 +30,7 @@ private:
   void appendLog(const QString& text);
   void updateWindowSizeByMode(bool isServerMode);
   rdqt::QualityPreset currentPreset() const;
+  rdqt::VideoCodec currentCodec() const;
 
 private:
   ServerController m_serverController;
@@ -51,6 +52,7 @@ private:
   QLineEdit* m_clientPortEdit = nullptr;
   QLineEdit* m_clientCodeEdit = nullptr;
   QComboBox* m_qualityBox = nullptr;
+  QComboBox* m_codecBox = nullptr;
   QComboBox* m_renderModeBox = nullptr;
   QPushButton* m_connectBtn = nullptr;
   QPushButton* m_disconnectBtn = nullptr;

@@ -23,9 +23,14 @@ ServerController::ServerController(QObject* parent) : QObject(parent) {
   connect(m_captureWorker, &CaptureWorker::logMessage, this, [](const QString& text) {
     applog::write(applog::Role::Server, text);
   });
-  connect(m_serverWorker, &TcpServerWorker::clientAuthed, m_captureWorker, [this](rdqt::QualityPreset preset) {
+  connect(m_serverWorker,
+          &TcpServerWorker::clientAuthed,
+          m_captureWorker,
+          [this](rdqt::QualityPreset preset, rdqt::VideoCodec codec) {
     QMetaObject::invokeMethod(
-        m_captureWorker, [this, preset]() { m_captureWorker->startCapture(preset, 12); }, Qt::QueuedConnection);
+        m_captureWorker,
+        [this, preset, codec]() { m_captureWorker->startCapture(preset, 12, codec); },
+        Qt::QueuedConnection);
   });
   connect(m_serverWorker,
           &TcpServerWorker::networkBacklogChanged,
@@ -33,8 +38,11 @@ ServerController::ServerController(QObject* parent) : QObject(parent) {
           &CaptureWorker::onNetworkBacklogChanged,
           Qt::QueuedConnection);
   connect(m_captureWorker, &CaptureWorker::qosUpdated, this, &ServerController::qosUpdated);
-  connect(m_serverWorker, &TcpServerWorker::clientAuthed, this, [](rdqt::QualityPreset preset) {
-    applog::write(applog::Role::Server, QStringLiteral("收到 clientAuthed 信号，清晰度=%1").arg(static_cast<int>(preset)));
+  connect(m_serverWorker, &TcpServerWorker::clientAuthed, this, [](rdqt::QualityPreset preset, rdqt::VideoCodec codec) {
+    applog::write(applog::Role::Server,
+                  QStringLiteral("收到 clientAuthed 信号，清晰度=%1，codec=%2")
+                      .arg(static_cast<int>(preset))
+                      .arg(static_cast<int>(codec)));
   });
   connect(m_captureWorker, &CaptureWorker::frameReady, m_serverWorker, &TcpServerWorker::sendPacket, Qt::QueuedConnection);
 

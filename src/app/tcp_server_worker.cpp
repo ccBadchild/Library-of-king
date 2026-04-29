@@ -18,6 +18,17 @@ DWORD mouseFlagFromButton(qint32 button, bool down) {
   return 0;
 }
 
+rdqt::VideoCodec resolveCodec(rdqt::VideoCodec requested, rdqt::QualityPreset preset) {
+  if (requested == rdqt::VideoCodec::H264 || requested == rdqt::VideoCodec::Jpeg) {
+    return requested;
+  }
+  // 自动模式：低清优先 JPEG（更轻量），标清/高清优先 H.264（带宽效率更高）。
+  if (preset == rdqt::QualityPreset::Low) {
+    return rdqt::VideoCodec::Jpeg;
+  }
+  return rdqt::VideoCodec::H264;
+}
+
 } // namespace
 
 TcpServerWorker::TcpServerWorker(QObject* parent) : QObject(parent) {
@@ -114,11 +125,23 @@ void TcpServerWorker::onSocketReadyRead() {
       ds.setVersion(QDataStream::Qt_5_15);
       QString code;
       quint8 presetRaw = 1;
-      ds >> code >> presetRaw;
+      quint8 codecRaw = static_cast<quint8>(rdqt::VideoCodec::Auto);
+      ds >> code >> presetRaw >> codecRaw;
+      const rdqt::QualityPreset preset = static_cast<rdqt::QualityPreset>(presetRaw);
+      const rdqt::VideoCodec requestedCodec = static_cast<rdqt::VideoCodec>(codecRaw);
+      const rdqt::VideoCodec selectedCodec = resolveCodec(requestedCodec, preset);
       const bool ok = (code == m_verifyCode);
-      const QString reason = ok ? QStringLiteral("校验成功") : QStringLiteral("验证码错误");
-      m_client->write(rdqt::packMessage(rdqt::MessageType::HelloAck, rdqt::makeHelloAckPayload(ok, reason)));
-      emit logMessage(QStringLiteral("收到握手请求：验证码长度=%1，清晰度=%2").arg(code.size()).arg(presetRaw));
+      const QString reason = ok ? QStringLiteral("校验成功，编码=%1")
+                                      .arg(selectedCodec == rdqt::VideoCodec::H264 ? QStringLiteral("H264")
+                                                                                   : QStringLiteral("JPEG"))
+                                : QStringLiteral("验证码错误");
+      m_client->write(
+          rdqt::packMessage(rdqt::MessageType::HelloAck, rdqt::makeHelloAckPayload(ok, reason, selectedCodec)));
+      emit logMessage(QStringLiteral("收到握手请求：验证码长度=%1，清晰度=%2，期望编码=%3，协商编码=%4")
+                          .arg(code.size())
+                          .arg(presetRaw)
+                          .arg(static_cast<int>(requestedCodec))
+                          .arg(static_cast<int>(selectedCodec)));
 
       if (!ok) {
         emit logMessage(QStringLiteral("客户端验证码错误，已拒绝连接"));
@@ -127,8 +150,9 @@ void TcpServerWorker::onSocketReadyRead() {
       }
 
       m_clientVerified = true;
+      m_clientCodec = selectedCodec;
       emit logMessage(QStringLiteral("客户端验证通过，开始推流"));
-      emit clientAuthed(static_cast<rdqt::QualityPreset>(presetRaw));
+      emit clientAuthed(preset, m_clientCodec);
       continue;
     }
 

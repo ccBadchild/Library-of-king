@@ -15,11 +15,16 @@ signals:
   void logMessage(const QString& text);
   void fullFrameArrived(const QImage& image);
   void patchArrived(const QVector<rdqt::PatchBlock>& patches);
+  void videoFrameArrived(const QSize& size, bool keyFrame, qint64 ptsMs, const QByteArray& data);
   void socketClosed();
   void pingRttUpdated(int ms);
 
 public slots:
-  void connectToHost(const QString& ip, quint16 port, const QString& verifyCode, rdqt::QualityPreset preset);
+  void connectToHost(const QString& ip,
+                     quint16 port,
+                     const QString& verifyCode,
+                     rdqt::QualityPreset preset,
+                     rdqt::VideoCodec codec);
   void disconnectHost();
   void sendInputEvent(const rdqt::RemoteInputEvent& event);
   void sendPing(qint64 clientTsMs);

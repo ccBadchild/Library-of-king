@@ -1,5 +1,6 @@
 #include "client_controller.h"
 #include "app_logger.h"
+#include "video_decode_worker.h"
 
 #include <QBuffer>
 #include <QDateTime>
@@ -8,8 +9,13 @@
 
 ClientController::ClientController(QObject* parent) : QObject(parent) {
   m_worker = new TcpClientWorker();
+  m_decodeWorker = new VideoDecodeWorker();
+
   m_worker->moveToThread(&m_networkThread);
+  m_decodeWorker->moveToThread(&m_decodeThread);
+
   connect(&m_networkThread, &QThread::finished, m_worker, &QObject::deleteLater);
+  connect(&m_decodeThread, &QThread::finished, m_decodeWorker, &QObject::deleteLater);
 
   m_reconnectTimer.setSingleShot(true);
   connect(&m_reconnectTimer, &QTimer::timeout, this, [this]() {
@@ -18,7 +24,7 @@ ClientController::ClientController(QObject* parent) : QObject(parent) {
     }
     ++m_reconnectCount;
     emit appendLog(QStringLiteral("自动重连第 %1 次...").arg(m_reconnectCount));
-    startConnect(m_lastIp, m_lastPort, m_lastCode, m_lastPreset);
+    startConnect(m_lastIp, m_lastPort, m_lastCode, m_lastPreset, m_lastCodec);
   });
 
   m_qosTimer.setInterval(1000);
@@ -50,7 +56,6 @@ ClientController::ClientController(QObject* parent) : QObject(parent) {
   connect(m_worker, &TcpClientWorker::connected, this, [this](bool ok, const QString& reason) {
     if (!ok &&
         (reason.contains(QStringLiteral("验证码错误")) || reason.contains(QStringLiteral("校验失败")))) {
-      // 验证码不匹配属于明确配置错误，不应继续自动重连打扰用户。
       m_autoReconnect = false;
       m_reconnectTimer.stop();
     }
@@ -74,6 +79,27 @@ ClientController::ClientController(QObject* parent) : QObject(parent) {
     applog::write(applog::Role::Client, QStringLiteral("收到补丁帧，脏块数量=%1").arg(patches.size()));
     emit frameUpdated(m_currentFrame);
   });
+
+  // 网络线程收到 H.264 包 → 队列投递到解码线程；解码完成后队列回主线程更新 UI。
+  connect(m_worker,
+          &TcpClientWorker::videoFrameArrived,
+          m_decodeWorker,
+          &VideoDecodeWorker::onVideoFrame,
+          Qt::QueuedConnection);
+  connect(m_decodeWorker,
+          &VideoDecodeWorker::frameDecoded,
+          this,
+          [this](const QImage& img, const QSize& logicalSize, qint64 encodedBytes) {
+            m_currentFrame = img;
+            m_lastResolution =
+                QStringLiteral("%1x%2").arg(logicalSize.width()).arg(logicalSize.height());
+            ++m_recvFramesWindow;
+            m_recvBytesWindow += encodedBytes;
+            emit frameUpdated(m_currentFrame);
+          },
+          Qt::QueuedConnection);
+  connect(m_decodeWorker, &VideoDecodeWorker::decodeLog, this, &ClientController::appendLog);
+
   connect(m_worker, &TcpClientWorker::socketClosed, this, [this]() {
     applog::write(applog::Role::Client, QStringLiteral("Socket 已关闭"));
     emit stateChanged(false, QStringLiteral("连接已关闭"));
@@ -85,16 +111,27 @@ ClientController::ClientController(QObject* parent) : QObject(parent) {
     m_lastLatencyMs = ms;
   });
 
+  m_decodeThread.start();
   m_networkThread.start();
 }
 
 ClientController::~ClientController() {
   stopConnect();
+
+  disconnect(m_worker, &TcpClientWorker::videoFrameArrived, m_decodeWorker, nullptr);
+
+  m_decodeThread.quit();
+  m_decodeThread.wait();
+
   m_networkThread.quit();
   m_networkThread.wait();
 }
 
-void ClientController::startConnect(const QString& ip, quint16 port, const QString& code, rdqt::QualityPreset preset) {
+void ClientController::startConnect(const QString& ip,
+                                    quint16 port,
+                                    const QString& code,
+                                    rdqt::QualityPreset preset,
+                                    rdqt::VideoCodec codec) {
   m_autoReconnect = true;
   m_userInitiatedDisconnect = false;
   m_reconnectTimer.stop();
@@ -103,6 +140,7 @@ void ClientController::startConnect(const QString& ip, quint16 port, const QStri
   m_lastPort = port;
   m_lastCode = code;
   m_lastPreset = preset;
+  m_lastCodec = codec;
   m_lastLatencyMs = -1;
   m_lastResolution = "-";
   applog::write(applog::Role::Client,
@@ -113,7 +151,7 @@ void ClientController::startConnect(const QString& ip, quint16 port, const QStri
                     .arg(static_cast<int>(preset)));
   QMetaObject::invokeMethod(
       m_worker,
-      [this, ip, port, code, preset]() { m_worker->connectToHost(ip, port, code, preset); },
+      [this, ip, port, code, preset, codec]() { m_worker->connectToHost(ip, port, code, preset, codec); },
       Qt::QueuedConnection);
 }
 

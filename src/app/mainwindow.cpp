@@ -82,6 +82,11 @@ void MainWindow::setupUi() {
   m_qualityBox->addItem(QStringLiteral("标清（平衡）"));
   m_qualityBox->addItem(QStringLiteral("高清（高质量）"));
   m_qualityBox->setCurrentIndex(1);
+  m_codecBox = new QComboBox(clientBox);
+  m_codecBox->addItem(QStringLiteral("自动（服务端协商）"));
+  m_codecBox->addItem(QStringLiteral("H.264"));
+  m_codecBox->addItem(QStringLiteral("JPEG"));
+  m_codecBox->setCurrentIndex(0);
   m_renderModeBox = new QComboBox(clientBox);
   m_renderModeBox->addItem(QStringLiteral("OpenGL渲染"));
   m_renderModeBox->addItem(QStringLiteral("软件渲染"));
@@ -95,6 +100,7 @@ void MainWindow::setupUi() {
   clientLayout->addRow(QStringLiteral("端口"), m_clientPortEdit);
   clientLayout->addRow(QStringLiteral("验证码"), m_clientCodeEdit);
   clientLayout->addRow(QStringLiteral("清晰度"), m_qualityBox);
+  clientLayout->addRow(QStringLiteral("编码"), m_codecBox);
   clientLayout->addRow(QStringLiteral("渲染模式"), m_renderModeBox);
   clientLayout->addRow(m_connectBtn);
   clientLayout->addRow(m_disconnectBtn);
@@ -206,7 +212,7 @@ void MainWindow::bindEvents() {
     appendLog(QStringLiteral("客户端日志文件：%1").arg(applog::filePath(applog::Role::Client)));
     // 仅在发起客户端连接时显示远程桌面区域，断开后将再次隐藏。
     m_remoteDesktopBox->setVisible(true);
-    m_clientController.startConnect(ip, port, code, currentPreset());
+    m_clientController.startConnect(ip, port, code, currentPreset(), currentCodec());
   });
 
   connect(m_disconnectBtn, &QPushButton::clicked, this, [this]() {
@@ -292,6 +298,7 @@ void MainWindow::bindEvents() {
     m_clientPortEdit->setEnabled(!isServer);
     m_clientCodeEdit->setEnabled(!isServer);
     m_qualityBox->setEnabled(!isServer);
+    m_codecBox->setEnabled(!isServer);
     m_connectBtn->setEnabled(!isServer && !m_clientConnected);
     m_disconnectBtn->setEnabled(!isServer && m_clientConnected);
     m_controlModeBtn->setEnabled(!isServer && m_clientConnected);
@@ -339,6 +346,17 @@ rdqt::QualityPreset MainWindow::currentPreset() const {
       return rdqt::QualityPreset::High;
     default:
       return rdqt::QualityPreset::Medium;
+  }
+}
+
+rdqt::VideoCodec MainWindow::currentCodec() const {
+  switch (m_codecBox ? m_codecBox->currentIndex() : 0) {
+    case 1:
+      return rdqt::VideoCodec::H264;
+    case 2:
+      return rdqt::VideoCodec::Jpeg;
+    default:
+      return rdqt::VideoCodec::Auto;
   }
 }
 

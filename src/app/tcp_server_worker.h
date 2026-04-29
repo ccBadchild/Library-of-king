@@ -12,7 +12,7 @@ public:
   explicit TcpServerWorker(QObject* parent = nullptr);
 
 signals:
-  void clientAuthed(rdqt::QualityPreset preset);
+  void clientAuthed(rdqt::QualityPreset preset, rdqt::VideoCodec codec);
   void logMessage(const QString& text);
   void networkBacklogChanged(qint64 bytes);
 
@@ -38,5 +38,6 @@ private:
   QByteArray m_readBuffer;
   QString m_verifyCode;
   bool m_clientVerified = false;
+  rdqt::VideoCodec m_clientCodec = rdqt::VideoCodec::Jpeg;
   quint64 m_inputRecvCount = 0;
 };

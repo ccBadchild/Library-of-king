@@ -8,6 +8,7 @@
 int main(int argc, char* argv[]) {
   QApplication app(argc, argv);
   qRegisterMetaType<rdqt::QualityPreset>("rdqt::QualityPreset");
+  qRegisterMetaType<rdqt::VideoCodec>("rdqt::VideoCodec");
   qRegisterMetaType<rdqt::PatchBlock>("rdqt::PatchBlock");
   qRegisterMetaType<QVector<rdqt::PatchBlock>>("QVector<rdqt::PatchBlock>");
   qRegisterMetaType<rdqt::RemoteInputEvent>("rdqt::RemoteInputEvent");

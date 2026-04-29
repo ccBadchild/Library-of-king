@@ -4,7 +4,10 @@
 
 #include <QObject>
 #include <atomic>
+#include <memory>
 #include <thread>
+
+class FfmpegH264Encoder;
 
 class CaptureWorker : public QObject {
   Q_OBJECT
@@ -18,7 +21,7 @@ signals:
   void qosUpdated(int fps, int kbps, int jpegQuality);
 
 public slots:
-  void startCapture(rdqt::QualityPreset preset, int fps);
+  void startCapture(rdqt::QualityPreset preset, int fps, rdqt::VideoCodec codec);
   void stopCapture();
   void onNetworkBacklogChanged(qint64 bytes);
 
@@ -32,6 +35,8 @@ private:
   std::atomic<bool> m_running{false};
   std::thread m_loopThread;
   rdqt::QualityPreset m_preset = rdqt::QualityPreset::Medium;
+  rdqt::VideoCodec m_codec = rdqt::VideoCodec::Jpeg;
+  std::unique_ptr<FfmpegH264Encoder> m_h264;
   int m_jpegQuality = 60;
   int m_targetFps = 12;
   std::atomic<qint64> m_networkBacklog{0};

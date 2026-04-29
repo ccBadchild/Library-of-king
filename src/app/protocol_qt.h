@@ -17,13 +17,20 @@ enum class MessageType : quint32 {
   PatchFrame = 4,
   InputEvent = 5,
   Ping = 6,
-  Pong = 7
+  Pong = 7,
+  VideoFrame = 8
 };
 
 enum class QualityPreset : quint8 {
   Low = 0,
   Medium = 1,
   High = 2
+};
+
+enum class VideoCodec : quint8 {
+  Auto = 0,
+  Jpeg = 1,
+  H264 = 2
 };
 
 struct PatchBlock {
@@ -87,21 +94,23 @@ inline QByteArray packMessage(MessageType type, const QByteArray& payload) {
   return out;
 }
 
-inline QByteArray makeHelloPayload(const QString& verifyCode, QualityPreset preset) {
+inline QByteArray makeHelloPayload(const QString& verifyCode, QualityPreset preset, VideoCodec codec) {
   QByteArray payload;
   QDataStream ds(&payload, QIODevice::WriteOnly);
   ds.setVersion(QDataStream::Qt_5_15);
   ds << verifyCode;
   ds << static_cast<quint8>(preset);
+  ds << static_cast<quint8>(codec);
   return payload;
 }
 
-inline QByteArray makeHelloAckPayload(bool ok, const QString& reason) {
+inline QByteArray makeHelloAckPayload(bool ok, const QString& reason, VideoCodec codec = VideoCodec::Jpeg) {
   QByteArray payload;
   QDataStream ds(&payload, QIODevice::WriteOnly);
   ds.setVersion(QDataStream::Qt_5_15);
   ds << static_cast<quint8>(ok ? 1 : 0);
   ds << reason;
+  ds << static_cast<quint8>(codec);
   return payload;
 }
 
@@ -147,9 +156,22 @@ inline QByteArray makePingPayload(qint64 clientTsMs) {
   return payload;
 }
 
+inline QByteArray makeVideoFramePayload(const QSize& size, bool keyFrame, qint64 ptsMs, const QByteArray& data) {
+  QByteArray payload;
+  QDataStream ds(&payload, QIODevice::WriteOnly);
+  ds.setVersion(QDataStream::Qt_5_15);
+  ds << static_cast<quint32>(size.width());
+  ds << static_cast<quint32>(size.height());
+  ds << static_cast<quint8>(keyFrame ? 1 : 0);
+  ds << static_cast<qint64>(ptsMs);
+  ds << data;
+  return payload;
+}
+
 } // namespace rdqt
 
 Q_DECLARE_METATYPE(rdqt::QualityPreset)
+Q_DECLARE_METATYPE(rdqt::VideoCodec)
 Q_DECLARE_METATYPE(rdqt::PatchBlock)
 Q_DECLARE_METATYPE(QVector<rdqt::PatchBlock>)
 Q_DECLARE_METATYPE(rdqt::RemoteInputEvent)

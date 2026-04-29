@@ -10,7 +10,8 @@ TcpClientWorker::TcpClientWorker(QObject* parent) : QObject(parent) {
 void TcpClientWorker::connectToHost(const QString& ip,
                                     quint16 port,
                                     const QString& verifyCode,
-                                    rdqt::QualityPreset preset) {
+                                    rdqt::QualityPreset preset,
+                                    rdqt::VideoCodec codec) {
   m_readBuffer.clear();
   m_waitingAck = true;
 
@@ -27,7 +28,8 @@ void TcpClientWorker::connectToHost(const QString& ip,
   }
   emit logMessage(QStringLiteral("TCP 已连接，发送验证码..."));
   const qint64 written =
-      m_socket->write(rdqt::packMessage(rdqt::MessageType::Hello, rdqt::makeHelloPayload(verifyCode, preset)));
+      m_socket->write(
+          rdqt::packMessage(rdqt::MessageType::Hello, rdqt::makeHelloPayload(verifyCode, preset, codec)));
   emit logMessage(QStringLiteral("已发送握手包，写入字节=%1").arg(written));
 }
 
@@ -97,10 +99,14 @@ void TcpClientWorker::processMessage(rdqt::MessageType type, const QByteArray& b
   if (type == rdqt::MessageType::HelloAck) {
     quint8 ok = 0;
     QString reason;
+    quint8 codecRaw = static_cast<quint8>(rdqt::VideoCodec::Jpeg);
     ds >> ok >> reason;
+    if (!ds.atEnd()) {
+      ds >> codecRaw;
+    }
     m_waitingAck = false;
     emit connected(ok == 1, reason);
-    emit logMessage(QStringLiteral("收到握手应答：ok=%1，reason=%2").arg(ok).arg(reason));
+    emit logMessage(QStringLiteral("收到握手应答：ok=%1，reason=%2，codec=%3").arg(ok).arg(reason).arg(codecRaw));
     if (ok != 1) {
       m_socket->disconnectFromHost();
     }
@@ -152,6 +158,17 @@ void TcpClientWorker::processMessage(rdqt::MessageType type, const QByteArray& b
     ds >> sentTs;
     const qint64 now = QDateTime::currentMSecsSinceEpoch();
     emit pingRttUpdated(static_cast<int>(qMax<qint64>(0, now - sentTs)));
+    return;
+  }
+
+  if (type == rdqt::MessageType::VideoFrame) {
+    quint32 w = 0;
+    quint32 h = 0;
+    quint8 key = 0;
+    qint64 ptsMs = 0;
+    QByteArray data;
+    ds >> w >> h >> key >> ptsMs >> data;
+    emit videoFrameArrived(QSize(static_cast<int>(w), static_cast<int>(h)), key == 1, ptsMs, data);
   }
 }
 
