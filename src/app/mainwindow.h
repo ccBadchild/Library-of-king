@@ -7,10 +7,14 @@
 
 #include "client_controller.h"
 #include "client_video_window.h"
+#include "file_transfer_dialog.h"
 #include "server_controller.h"
+#include "tcp_file_client_worker.h"
 
 #include <QCloseEvent>
 #include <QComboBox>
+#include <QDateTime>
+#include <QFile>
 #include <QGroupBox>
 #include <QLabel>
 #include <QLineEdit>
@@ -64,12 +68,49 @@ private:
   rdqt::QualityPreset currentPreset() const;
   /** 编码下拉框 → 协议枚举。 */
   rdqt::VideoCodec currentCodec() const;
+  void openFileTransferDialog();
+  void loadPersistedTransferState();
+  void savePersistedTransferState() const;
+  void clearPersistedTransferState() const;
+  void tryResumePendingTransfer();
+  /** 取消当前下载任务；如 removePartialFile=true，会删除本地未完成文件。 */
+  void cancelDownloadTask(bool removePartialFile, const QString& reason);
+  /** 取消当前上传任务；当前协议不删除远端残留文件，仅停止继续发送。 */
+  void cancelUploadTask(const QString& reason);
+  /** 根据最近一次分片完成情况计算瞬时速度，返回 bytes/s。 */
+  double computeTransferSpeed(qint64 transferredBytes, qint64& sampleBytes, qint64& sampleMs) const;
 
 private:
+  struct DownloadTaskState {
+    bool active = false;
+    bool paused = false;
+    QString remotePath;
+    QString localPath;
+    qint64 totalBytes = 0;
+    qint64 transferredBytes = 0;
+    qint64 speedSampleBytes = 0;
+    qint64 speedSampleMs = 0;
+    QFile file;
+  };
+
+  struct UploadTaskState {
+    bool active = false;
+    bool paused = false;
+    QString localPath;
+    QString remotePath;
+    qint64 totalBytes = 0;
+    qint64 transferredBytes = 0;
+    qint64 speedSampleBytes = 0;
+    qint64 speedSampleMs = 0;
+    QFile file;
+  };
+
   /** 服务端线程内工作与捕获逻辑封装。 */
   ServerController m_serverController;
   /** 客户端 TCP、解码与连接状态封装。 */
   ClientController m_clientController;
+  QThread m_fileNetworkThread;
+  TcpFileClientWorker* m_fileWorker = nullptr;
 
   TitleBar* m_titleBar = nullptr;
   QWidget* m_leftPanel = nullptr;
@@ -102,6 +143,7 @@ private:
   ClientVideoWindow* m_clientVideoWindow = nullptr;
   /** 常驻托盘图标；主窗口 hide 后仍可通过托盘恢复或退出进程。 */
   QSystemTrayIcon* m_trayIcon = nullptr;
+  FileTransferDialog* m_fileTransferDialog = nullptr;
   QTextEdit* m_logEdit = nullptr;
   /** 客户端模式下上次记录的主窗口尺寸（窄面板宽度），用于服务端 ⇄ 客户端切换时还原。 */
   QSize m_clientModeSize;
@@ -113,4 +155,6 @@ private:
   bool m_remoteControlEnabled = false;
   /** 连接目标为本机环回或本机网卡地址时置 true（预留业务判断用）。 */
   bool m_isLoopbackTarget = false;
+  DownloadTaskState m_downloadTask;
+  UploadTaskState m_uploadTask;
 };

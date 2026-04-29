@@ -27,7 +27,23 @@ enum class MessageType : quint32 {
   InputEvent = 5,
   Ping = 6,
   Pong = 7,
-  VideoFrame = 8
+  VideoFrame = 8,
+  FileHello = 20,
+  FileHelloAck = 21,
+  FsListRootsReq = 22,
+  FsListRootsRsp = 23,
+  FsListDirReq = 24,
+  FsListDirRsp = 25,
+  FsReadFileReq = 26,
+  FsReadFileRsp = 27,
+  FsWriteFileReq = 28,
+  FsWriteFileRsp = 29,
+  FsReadChunkReq = 30,
+  FsReadChunkRsp = 31,
+  FsWriteChunkReq = 32,
+  FsWriteChunkRsp = 33,
+  FsDeletePathReq = 34,
+  FsDeletePathRsp = 35
 };
 
 /** 清晰度档位：影响服务端缩放分辨率与 JPEG 质量；Auto 编码模式下还与协商 H264/JPEG 有关。 */
@@ -69,6 +85,14 @@ struct RemoteInputEvent {
   qint32 key = 0;
   qint32 buttons = 0;
   qint32 modifiers = 0;
+};
+
+/** 远程文件浏览目录项：名称、绝对路径、目录标记与大小。 */
+struct FileEntry {
+  QString name;
+  QString path;
+  bool isDir = false;
+  qint64 size = -1;
 };
 
 /** 按清晰度档位映射 JPEG 量化质量参数（数值越小体积越小）。 */
@@ -191,6 +215,178 @@ inline QByteArray makeVideoFramePayload(const QSize& size, bool keyFrame, qint64
   return payload;
 }
 
+inline QByteArray makeFileHelloPayload(const QString& verifyCode) {
+  QByteArray payload;
+  QDataStream ds(&payload, QIODevice::WriteOnly);
+  ds.setVersion(QDataStream::Qt_5_15);
+  ds << verifyCode;
+  return payload;
+}
+
+inline QByteArray makeFileHelloAckPayload(bool ok, const QString& reason) {
+  QByteArray payload;
+  QDataStream ds(&payload, QIODevice::WriteOnly);
+  ds.setVersion(QDataStream::Qt_5_15);
+  ds << static_cast<quint8>(ok ? 1 : 0);
+  ds << reason;
+  return payload;
+}
+
+inline QByteArray makeListDirPayload(const QString& path) {
+  QByteArray payload;
+  QDataStream ds(&payload, QIODevice::WriteOnly);
+  ds.setVersion(QDataStream::Qt_5_15);
+  ds << path;
+  return payload;
+}
+
+inline QByteArray makeFileEntriesPayload(const QString& basePath, const QVector<FileEntry>& entries) {
+  QByteArray payload;
+  QDataStream ds(&payload, QIODevice::WriteOnly);
+  ds.setVersion(QDataStream::Qt_5_15);
+  ds << basePath;
+  ds << static_cast<quint32>(entries.size());
+  for (const FileEntry& entry : entries) {
+    ds << entry.name;
+    ds << entry.path;
+    ds << static_cast<quint8>(entry.isDir ? 1 : 0);
+    ds << entry.size;
+  }
+  return payload;
+}
+
+inline QByteArray makeReadFilePayload(const QString& path) {
+  QByteArray payload;
+  QDataStream ds(&payload, QIODevice::WriteOnly);
+  ds.setVersion(QDataStream::Qt_5_15);
+  ds << path;
+  return payload;
+}
+
+inline QByteArray makeReadFileResponsePayload(const QString& path, bool ok, const QString& reason, const QByteArray& data) {
+  QByteArray payload;
+  QDataStream ds(&payload, QIODevice::WriteOnly);
+  ds.setVersion(QDataStream::Qt_5_15);
+  ds << path;
+  ds << static_cast<quint8>(ok ? 1 : 0);
+  ds << reason;
+  ds << data;
+  return payload;
+}
+
+inline QByteArray makeWriteFilePayload(const QString& targetPath, const QByteArray& data) {
+  QByteArray payload;
+  QDataStream ds(&payload, QIODevice::WriteOnly);
+  ds.setVersion(QDataStream::Qt_5_15);
+  ds << targetPath;
+  ds << data;
+  return payload;
+}
+
+inline QByteArray makeWriteFileResponsePayload(const QString& targetPath, bool ok, const QString& reason) {
+  QByteArray payload;
+  QDataStream ds(&payload, QIODevice::WriteOnly);
+  ds.setVersion(QDataStream::Qt_5_15);
+  ds << targetPath;
+  ds << static_cast<quint8>(ok ? 1 : 0);
+  ds << reason;
+  return payload;
+}
+
+inline QByteArray makeReadChunkPayload(const QString& path, qint64 offset, qint32 maxBytes) {
+  QByteArray payload;
+  QDataStream ds(&payload, QIODevice::WriteOnly);
+  ds.setVersion(QDataStream::Qt_5_15);
+  ds << path << offset << maxBytes;
+  return payload;
+}
+
+inline QByteArray makeReadChunkResponsePayload(const QString& path,
+                                               qint64 totalSize,
+                                               qint64 offset,
+                                               bool done,
+                                               bool ok,
+                                               const QString& reason,
+                                               const QByteArray& data) {
+  QByteArray payload;
+  QDataStream ds(&payload, QIODevice::WriteOnly);
+  ds.setVersion(QDataStream::Qt_5_15);
+  ds << path << totalSize << offset;
+  ds << static_cast<quint8>(done ? 1 : 0);
+  ds << static_cast<quint8>(ok ? 1 : 0);
+  ds << reason;
+  ds << data;
+  return payload;
+}
+
+inline QByteArray makeWriteChunkPayload(const QString& targetPath,
+                                        qint64 totalSize,
+                                        qint64 offset,
+                                        const QByteArray& data) {
+  QByteArray payload;
+  QDataStream ds(&payload, QIODevice::WriteOnly);
+  ds.setVersion(QDataStream::Qt_5_15);
+  ds << targetPath << totalSize << offset << data;
+  return payload;
+}
+
+inline QByteArray makeWriteChunkResponsePayload(const QString& targetPath,
+                                                qint64 totalSize,
+                                                qint64 offset,
+                                                qint32 writtenBytes,
+                                                bool done,
+                                                bool ok,
+                                                const QString& reason) {
+  QByteArray payload;
+  QDataStream ds(&payload, QIODevice::WriteOnly);
+  ds.setVersion(QDataStream::Qt_5_15);
+  ds << targetPath << totalSize << offset << writtenBytes;
+  ds << static_cast<quint8>(done ? 1 : 0);
+  ds << static_cast<quint8>(ok ? 1 : 0);
+  ds << reason;
+  return payload;
+}
+
+inline QByteArray makeDeletePathPayload(const QString& path, bool recursive) {
+  QByteArray payload;
+  QDataStream ds(&payload, QIODevice::WriteOnly);
+  ds.setVersion(QDataStream::Qt_5_15);
+  ds << path;
+  ds << static_cast<quint8>(recursive ? 1 : 0);
+  return payload;
+}
+
+inline QByteArray makeDeletePathResponsePayload(const QString& path, bool ok, const QString& reason) {
+  QByteArray payload;
+  QDataStream ds(&payload, QIODevice::WriteOnly);
+  ds.setVersion(QDataStream::Qt_5_15);
+  ds << path;
+  ds << static_cast<quint8>(ok ? 1 : 0);
+  ds << reason;
+  return payload;
+}
+
+inline bool readFileEntriesPayload(const QByteArray& body, QString* basePath, QVector<FileEntry>* entriesOut) {
+  if (!basePath || !entriesOut) {
+    return false;
+  }
+  QDataStream ds(body);
+  ds.setVersion(QDataStream::Qt_5_15);
+  quint32 count = 0;
+  ds >> *basePath >> count;
+  QVector<FileEntry> entries;
+  entries.reserve(static_cast<int>(count));
+  for (quint32 i = 0; i < count; ++i) {
+    FileEntry entry;
+    quint8 isDir = 0;
+    ds >> entry.name >> entry.path >> isDir >> entry.size;
+    entry.isDir = (isDir == 1);
+    entries.push_back(entry);
+  }
+  *entriesOut = entries;
+  return ds.status() == QDataStream::Ok;
+}
+
 } // namespace rdqt
 
 Q_DECLARE_METATYPE(rdqt::QualityPreset)
@@ -198,3 +394,5 @@ Q_DECLARE_METATYPE(rdqt::VideoCodec)
 Q_DECLARE_METATYPE(rdqt::PatchBlock)
 Q_DECLARE_METATYPE(QVector<rdqt::PatchBlock>)
 Q_DECLARE_METATYPE(rdqt::RemoteInputEvent)
+Q_DECLARE_METATYPE(rdqt::FileEntry)
+Q_DECLARE_METATYPE(QVector<rdqt::FileEntry>)

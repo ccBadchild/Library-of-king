@@ -27,6 +27,7 @@ add_executable(RemoteControl
   src/app/app_logger.cpp
   src/app/mainwindow.cpp
   src/app/client_video_window.cpp
+  src/app/file_transfer_dialog.cpp
   src/app/resources.qrc
   src/app/title_bar.cpp
   src/app/ffmpeg_h264_encoder.cpp
@@ -39,9 +40,12 @@ add_executable(RemoteControl
   src/app/capture_worker.cpp
   src/app/tcp_server_worker.cpp
   src/app/tcp_client_worker.cpp
+  src/app/tcp_file_server_worker.cpp
+  src/app/tcp_file_client_worker.cpp
   src/app/RemoteControl.rc
   src/app/mainwindow.h
   src/app/client_video_window.h
+  src/app/file_transfer_dialog.h
   src/app/title_bar.h
   src/app/ffmpeg_h264_encoder.h
   src/app/ffmpeg_h264_decoder.h
@@ -53,6 +57,8 @@ add_executable(RemoteControl
   src/app/capture_worker.h
   src/app/tcp_server_worker.h
   src/app/tcp_client_worker.h
+  src/app/tcp_file_server_worker.h
+  src/app/tcp_file_client_worker.h
   src/app/protocol_qt.h
   src/app/app_logger.h
 )

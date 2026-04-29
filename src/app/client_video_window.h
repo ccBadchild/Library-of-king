@@ -7,6 +7,8 @@
 
 #include <QCloseEvent>
 #include <QEvent>
+#include <QKeyEvent>
+#include <QPoint>
 #include <QStackedWidget>
 #include <QWidget>
 
@@ -16,6 +18,10 @@
 #include "video_render_widget.h"
 
 class TitleBar;
+class QGraphicsOpacityEffect;
+class QPropertyAnimation;
+class QPushButton;
+class QTimer;
 
 /**
  * @class ClientVideoWindow
@@ -39,15 +45,43 @@ public:
   VideoRenderWidget* videoWidget() const { return m_videoWidget; }
   SoftwareRenderWidget* softwareWidget() const { return m_softwareWidget; }
 
+signals:
+  void transferRequested();
+
 protected:
   void closeEvent(QCloseEvent* event) override;
   /** 同步标题栏最大化按钮图标与系统最大化/还原状态（含 Win+↑ 等方式触发的状态变化）。 */
   void changeEvent(QEvent* event) override;
+  /** 全屏时支持 Esc 快捷退出。 */
+  void keyPressEvent(QKeyEvent* event) override;
+  /** 监听悬浮栏鼠标进入/离开，用于自动收起计时。 */
+  bool eventFilter(QObject* watched, QEvent* event) override;
 
 private:
+  /** 根据当前全屏状态刷新按钮文案。 */
+  void updateFullScreenButtonText();
+  /** 鼠标是否进入远程画面顶部的唤出区域。 */
+  bool isInToolbarHotZone(const QPoint& localPos) const;
+  /** 切换悬浮栏展开/收起状态，并同步箭头方向。 */
+  void setToolbarExpanded(bool expanded);
+  /** 展开后启动或续期自动收起计时。 */
+  void restartAutoCollapseTimer();
+  /** 根据鼠标位置决定是否显示折叠态入口。 */
+  void updateToolbarVisibilityByPointer(const QPoint& localPos);
+  /** 淡入 / 淡出悬浮工具栏容器。 */
+  void setToolbarVisibleAnimated(bool visible);
   /** 可选的关窗前回调；典型用途：询问是否断开远程连接。 */
   std::function<bool()> m_closeVerifier;
   TitleBar* m_titleBar = nullptr;
+  QWidget* m_floatToolbar = nullptr;
+  QPushButton* m_toolbarToggleBtn = nullptr;
+  QPushButton* m_transferBtn = nullptr;
+  QPushButton* m_fullScreenBtn = nullptr;
+  QTimer* m_autoCollapseTimer = nullptr;
+  QGraphicsOpacityEffect* m_toolbarOpacityEffect = nullptr;
+  QPropertyAnimation* m_toolbarFadeAnimation = nullptr;
+  bool m_toolbarExpanded = false;
+  bool m_toolbarShown = false;
   /** 第 0 页为 OpenGL（VideoRenderWidget），第 1 页为软件渲染（SoftwareRenderWidget）。 */
   QStackedWidget* m_renderStack = nullptr;
   VideoRenderWidget* m_videoWidget = nullptr;

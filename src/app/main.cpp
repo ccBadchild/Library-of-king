@@ -19,6 +19,8 @@ int main(int argc, char* argv[]) {
   qRegisterMetaType<rdqt::PatchBlock>("rdqt::PatchBlock");
   qRegisterMetaType<QVector<rdqt::PatchBlock>>("QVector<rdqt::PatchBlock>");
   qRegisterMetaType<rdqt::RemoteInputEvent>("rdqt::RemoteInputEvent");
+  qRegisterMetaType<rdqt::FileEntry>("rdqt::FileEntry");
+  qRegisterMetaType<QVector<rdqt::FileEntry>>("QVector<rdqt::FileEntry>");
 
   QFile qssFile(QStringLiteral(":/styles/dark.qss"));
   if (qssFile.open(QIODevice::ReadOnly | QIODevice::Text)) {

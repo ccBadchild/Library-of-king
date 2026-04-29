@@ -12,16 +12,23 @@
 
 ServerController::ServerController(QObject* parent) : QObject(parent) {
   m_serverWorker = new TcpServerWorker();
+  m_fileServerWorker = new TcpFileServerWorker();
   m_captureWorker = new CaptureWorker();
 
   m_serverWorker->moveToThread(&m_networkThread);
+  m_fileServerWorker->moveToThread(&m_networkThread);
   m_captureWorker->moveToThread(&m_captureThread);
 
   connect(&m_networkThread, &QThread::finished, m_serverWorker, &QObject::deleteLater);
+  connect(&m_networkThread, &QThread::finished, m_fileServerWorker, &QObject::deleteLater);
   connect(&m_captureThread, &QThread::finished, m_captureWorker, &QObject::deleteLater);
 
   connect(m_serverWorker, &TcpServerWorker::logMessage, this, &ServerController::appendLog);
+  connect(m_fileServerWorker, &TcpFileServerWorker::logMessage, this, &ServerController::appendLog);
   connect(m_serverWorker, &TcpServerWorker::logMessage, this, [](const QString& text) {
+    applog::write(applog::Role::Server, text);
+  });
+  connect(m_fileServerWorker, &TcpFileServerWorker::logMessage, this, [](const QString& text) {
     applog::write(applog::Role::Server, text);
   });
   connect(m_captureWorker, &CaptureWorker::logMessage, this, &ServerController::appendLog);
@@ -80,10 +87,15 @@ void ServerController::startServer(quint16 port) {
       m_serverWorker,
       [this, port]() { m_serverWorker->startListen(port, m_verifyCode); },
       Qt::QueuedConnection);
+  QMetaObject::invokeMethod(
+      m_fileServerWorker,
+      [this, port]() { m_fileServerWorker->startListen(static_cast<quint16>(port + 1), m_verifyCode); },
+      Qt::QueuedConnection);
 }
 
 void ServerController::stopServer() {
   applog::write(applog::Role::Server, QStringLiteral("收到停止服务端请求"));
   QMetaObject::invokeMethod(m_captureWorker, [this]() { m_captureWorker->stopCapture(); }, Qt::QueuedConnection);
   QMetaObject::invokeMethod(m_serverWorker, [this]() { m_serverWorker->stopListen(); }, Qt::QueuedConnection);
+  QMetaObject::invokeMethod(m_fileServerWorker, [this]() { m_fileServerWorker->stopListen(); }, Qt::QueuedConnection);
 }

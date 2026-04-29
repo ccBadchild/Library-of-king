@@ -126,3 +126,132 @@ QMenu::separator{height:1px;background:#3f4350;margin:4px 8px;}
 
 VideoRenderWidget, SoftwareRenderWidget{background:#111;}
 
+#videoFloatToolbar{
+  background:rgba(32,35,43,220);
+  border:1px solid #3a3e49;
+  border-radius:8px;
+}
+
+#videoToolbarToggleBtn{
+  background:transparent;
+  color:#e8e8e8;
+  border:none;
+  border-radius:6px;
+  padding:4px 8px;
+  font-size:14px;
+  min-width:30px;
+}
+#videoToolbarToggleBtn:hover{background:#2c2f3a;}
+#videoToolbarToggleBtn:pressed{background:#23262e;}
+
+#videoFullScreenBtn{
+  background:#2d7dff;
+  color:#fff;
+  border:none;
+  border-radius:6px;
+  padding:6px 14px;
+  min-width:88px;
+}
+#videoFullScreenBtn:hover{background:#1d6aea;}
+#videoFullScreenBtn:pressed{background:#1456c8;}
+
+#videoTransferBtn{
+  background:#2d7dff;
+  color:#fff;
+  border:none;
+  border-radius:6px;
+  padding:6px 14px;
+  min-width:96px;
+}
+#videoTransferBtn:hover{background:#1d6aea;}
+#videoTransferBtn:pressed{background:#1456c8;}
+
+FileTransferDialog{
+  background:#1e1f24;
+  color:#e8e8e8;
+  border:1px solid #343846;
+  border-radius:10px;
+}
+
+#fileTransferHintLabel{
+  background:#262a33;
+  border:1px solid #3f4350;
+  border-radius:8px;
+  padding:10px 12px;
+  color:#d6dae3;
+}
+
+#fileTransferPane{
+  background:#262a33;
+  border:1px solid #3f4350;
+  border-radius:8px;
+}
+
+#fileTransferPaneTitle{
+  font-size:15px;
+  font-weight:bold;
+  color:#f0f3f8;
+}
+
+#fileTransferPathLabel{
+  background:#1f222a;
+  border:1px solid #4a4f5c;
+  border-radius:6px;
+  padding:6px 8px;
+  color:#dfe3ea;
+}
+
+#fileTransferSubtleBtn{
+  background:#343846;
+  color:#f4f6fb;
+  border:none;
+  border-radius:6px;
+  padding:6px 12px;
+}
+#fileTransferSubtleBtn:hover{background:#424756;}
+#fileTransferSubtleBtn:pressed{background:#2b2f3b;}
+
+#fileTransferTree,#fileTransferTaskTable{
+  background:#171a21;
+  border:1px solid #3a3e49;
+  border-radius:6px;
+  alternate-background-color:#1c2028;
+  gridline-color:#313643;
+  color:#e8e8e8;
+  selection-background-color:#2d7dff;
+  selection-color:#ffffff;
+}
+
+#fileTransferTree::item,#fileTransferTaskTable::item{
+  padding:6px 4px;
+}
+
+#fileTransferTree::item:selected,#fileTransferTaskTable::item:selected{
+  background:#2d7dff;
+  color:#ffffff;
+}
+
+#fileTransferTree QHeaderView::section,
+#fileTransferTaskTable QHeaderView::section,
+#fileTransferTaskHeader::section{
+  background:#20232b;
+  color:#dfe3ea;
+  font-weight:600;
+  border:none;
+  border-right:1px solid #343846;
+  border-bottom:1px solid #343846;
+  padding:8px 10px;
+}
+
+#fileTransferTaskTable QTableCornerButton::section{
+  background:#20232b;
+  border:none;
+  border-right:1px solid #343846;
+  border-bottom:1px solid #343846;
+}
+
+#fileTransferSplitter::handle{
+  background:#343846;
+  width:4px;
+}
+

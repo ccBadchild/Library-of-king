@@ -6,6 +6,7 @@
  */
 
 #include "capture_worker.h"
+#include "tcp_file_server_worker.h"
 #include "tcp_server_worker.h"
 
 #include <QObject>
@@ -45,5 +46,6 @@ private:
   QThread m_networkThread;
   QThread m_captureThread;
   TcpServerWorker* m_serverWorker = nullptr;
+  TcpFileServerWorker* m_fileServerWorker = nullptr;
   CaptureWorker* m_captureWorker = nullptr;
 };
