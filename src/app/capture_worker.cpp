@@ -213,7 +213,8 @@ void CaptureWorker::captureOnce() {
         emit logMessage(QStringLiteral("H.264 编码器初始化失败：%1，回退 JPEG").arg(m_h264->lastError()));
         m_codec = rdqt::VideoCodec::Jpeg;
       } else {
-        emit logMessage(QStringLiteral("H.264 编码器已就绪：%1x%2 fps=%3 kbps=%4")
+        emit logMessage(QStringLiteral("H.264 编码已就绪：后端=%1，分辨率=%2x%3，fps=%4，码率=%5 kbps")
+                            .arg(m_h264->backendDescription())
                             .arg(scaled.width())
                             .arg(scaled.height())
                             .arg(m_targetFps)

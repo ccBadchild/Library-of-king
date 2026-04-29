@@ -2,9 +2,10 @@
 
 #include <QByteArray>
 #include <QImage>
-#include <QSize>
+#include <QString>
 #include <QVector>
 
+struct AVCodec;
 struct AVCodecContext;
 struct AVFrame;
 struct SwsContext;
@@ -22,6 +23,8 @@ public:
 
   bool isReady() const;
   QString lastError() const;
+  /** 当前编码后端说明，如 NVENC / AMF / QSV / software (libx264) */
+  QString backendDescription() const;
 
   bool open(const QSize& size, int fps, int kbps);
   void close();
@@ -29,6 +32,9 @@ public:
   QVector<Packet> encode(const QImage& argb32Frame, qint64 ptsMs);
 
 private:
+  bool tryOpenCodec(const AVCodec* codec, const QString& backendLabel, const QSize& size, int fps, int kbps);
+  static void applyCodecOptions(AVCodecContext* ctx, const char* codecName);
+
   void setError(const QString& text);
 
 private:
@@ -39,6 +45,6 @@ private:
   int m_fps = 30;
   bool m_ready = false;
   QString m_error;
+  QString m_backendDesc;
   qint64 m_frameIndex = 0;
 };
-

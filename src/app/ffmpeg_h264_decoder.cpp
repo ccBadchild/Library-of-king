@@ -2,8 +2,9 @@
 
 extern "C" {
 #include <libavcodec/avcodec.h>
-#include <libavutil/imgutils.h>
 #include <libavutil/error.h>
+#include <libavutil/hwcontext.h>
+#include <libavutil/imgutils.h>
 #include <libswscale/swscale.h>
 }
 
@@ -15,7 +16,31 @@ QString ffErr(int err) {
   return QString::fromUtf8(buf);
 }
 
+QString hwTypeLabel(int hwDeviceType) {
+  switch (hwDeviceType) {
+    case AV_HWDEVICE_TYPE_D3D11VA:
+      return QStringLiteral("D3D11VA");
+    case AV_HWDEVICE_TYPE_DXVA2:
+      return QStringLiteral("DXVA2");
+    default:
+      return QStringLiteral("HW(%1)").arg(hwDeviceType);
+  }
+}
+
 } // namespace
+
+extern "C" AVPixelFormat ffmpeg_decoder_hw_format(AVCodecContext* avctx, const AVPixelFormat* pix_fmts) {
+  auto* self = static_cast<FfmpegH264Decoder*>(avctx->opaque);
+  if (!self) {
+    return AV_PIX_FMT_NONE;
+  }
+  for (const AVPixelFormat* p = pix_fmts; *p != AV_PIX_FMT_NONE; ++p) {
+    if (*p == self->m_hwPixFmt) {
+      return *p;
+    }
+  }
+  return AV_PIX_FMT_NONE;
+}
 
 FfmpegH264Decoder::FfmpegH264Decoder() = default;
 
@@ -31,17 +56,79 @@ QString FfmpegH264Decoder::lastError() const {
   return m_error;
 }
 
+QString FfmpegH264Decoder::backendDescription() const {
+  return m_backendDesc;
+}
+
 void FfmpegH264Decoder::setError(const QString& text) {
   m_error = text;
 }
 
-bool FfmpegH264Decoder::open() {
-  close();
-  const AVCodec* codec = avcodec_find_decoder(AV_CODEC_ID_H264);
-  if (!codec) {
-    setError(QStringLiteral("找不到 H.264 解码器"));
+bool FfmpegH264Decoder::tryOpenHardware(const AVCodec* codec, int hwDeviceType) {
+  const auto type = static_cast<AVHWDeviceType>(hwDeviceType);
+
+  m_hwPixFmt = AV_PIX_FMT_NONE;
+  for (int i = 0;; ++i) {
+    const AVCodecHWConfig* cfg = avcodec_get_hw_config(codec, i);
+    if (!cfg) {
+      break;
+    }
+    if (cfg->device_type != type) {
+      continue;
+    }
+    if (!(cfg->methods & AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX)) {
+      continue;
+    }
+    m_hwPixFmt = cfg->pix_fmt;
+    break;
+  }
+  if (m_hwPixFmt == AV_PIX_FMT_NONE) {
     return false;
   }
+
+  AVBufferRef* hwDev = nullptr;
+  const int devRc = av_hwdevice_ctx_create(&hwDev, type, nullptr, nullptr, 0);
+  if (devRc < 0) {
+    return false;
+  }
+
+  m_ctx = avcodec_alloc_context3(codec);
+  if (!m_ctx) {
+    av_buffer_unref(&hwDev);
+    return false;
+  }
+
+  m_ctx->hw_device_ctx = av_buffer_ref(hwDev);
+  av_buffer_unref(&hwDev);
+
+  m_ctx->opaque = this;
+  m_ctx->get_format = ffmpeg_decoder_hw_format;
+  m_ctx->thread_count = 1;
+
+  const int openRc = avcodec_open2(m_ctx, codec, nullptr);
+  if (openRc < 0) {
+    avcodec_free_context(&m_ctx);
+    m_ctx = nullptr;
+    m_hwPixFmt = AV_PIX_FMT_NONE;
+    return false;
+  }
+
+  m_frame = av_frame_alloc();
+  m_swTransfer = av_frame_alloc();
+  m_bgra = av_frame_alloc();
+  if (!m_frame || !m_swTransfer || !m_bgra) {
+    setError(QStringLiteral("av_frame_alloc 失败"));
+    close();
+    return false;
+  }
+
+  m_hwDecode = true;
+  m_backendDesc = hwTypeLabel(hwDeviceType);
+  m_ready = true;
+  return true;
+}
+
+bool FfmpegH264Decoder::openSoftwareOnly(const AVCodec* codec) {
   m_ctx = avcodec_alloc_context3(codec);
   if (!m_ctx) {
     setError(QStringLiteral("avcodec_alloc_context3 失败"));
@@ -51,9 +138,11 @@ bool FfmpegH264Decoder::open() {
   const int rc = avcodec_open2(m_ctx, codec, nullptr);
   if (rc < 0) {
     setError(QStringLiteral("avcodec_open2 失败：%1").arg(ffErr(rc)));
-    close();
+    avcodec_free_context(&m_ctx);
+    m_ctx = nullptr;
     return false;
   }
+
   m_frame = av_frame_alloc();
   m_bgra = av_frame_alloc();
   if (!m_frame || !m_bgra) {
@@ -61,15 +150,51 @@ bool FfmpegH264Decoder::open() {
     close();
     return false;
   }
+
+  m_hwDecode = false;
+  m_backendDesc = QStringLiteral("software");
   m_ready = true;
   return true;
 }
 
+bool FfmpegH264Decoder::open() {
+  close();
+
+  const AVCodec* codec = avcodec_find_decoder(AV_CODEC_ID_H264);
+  if (!codec) {
+    setError(QStringLiteral("找不到 H.264 解码器"));
+    return false;
+  }
+
+#ifdef _WIN32
+  const int hwTypes[] = {
+      AV_HWDEVICE_TYPE_D3D11VA,
+      AV_HWDEVICE_TYPE_DXVA2,
+  };
+  for (int ht : hwTypes) {
+    if (tryOpenHardware(codec, ht)) {
+      return true;
+    }
+  }
+#endif
+
+  return openSoftwareOnly(codec);
+}
+
 void FfmpegH264Decoder::close() {
   m_ready = false;
+  m_hwDecode = false;
+  m_hwPixFmt = AV_PIX_FMT_NONE;
+  m_lastSrcPixFmt = AV_PIX_FMT_NONE;
+  m_backendDesc.clear();
+
   if (m_sws) {
     sws_freeContext(m_sws);
     m_sws = nullptr;
+  }
+  if (m_swTransfer) {
+    av_frame_free(&m_swTransfer);
+    m_swTransfer = nullptr;
   }
   if (m_bgra) {
     av_frame_free(&m_bgra);
@@ -122,21 +247,36 @@ bool FfmpegH264Decoder::decode(const QByteArray& packetData, QImage& outImage) {
     return false;
   }
 
-  const QSize sz(m_frame->width, m_frame->height);
+  AVFrame* srcForSws = m_frame;
+  if (m_hwDecode) {
+    if (!m_swTransfer) {
+      return false;
+    }
+    av_frame_unref(m_swTransfer);
+    const int tr = av_hwframe_transfer_data(m_swTransfer, m_frame, 0);
+    if (tr < 0) {
+      setError(QStringLiteral("av_hwframe_transfer_data 失败：%1").arg(ffErr(tr)));
+      return false;
+    }
+    srcForSws = m_swTransfer;
+  }
+
+  const QSize sz(srcForSws->width, srcForSws->height);
   if (sz.isEmpty()) {
     return false;
   }
 
-  if (m_lastSize != sz || !m_sws) {
+  const AVPixelFormat srcFmt = static_cast<AVPixelFormat>(srcForSws->format);
+  if (m_lastSize != sz || m_lastSrcPixFmt != srcFmt || !m_sws) {
     if (m_sws) {
       sws_freeContext(m_sws);
       m_sws = nullptr;
     }
-    m_sws = sws_getContext(m_frame->width,
-                           m_frame->height,
-                           static_cast<AVPixelFormat>(m_frame->format),
-                           m_frame->width,
-                           m_frame->height,
+    m_sws = sws_getContext(srcForSws->width,
+                           srcForSws->height,
+                           srcFmt,
+                           srcForSws->width,
+                           srcForSws->height,
                            AV_PIX_FMT_BGRA,
                            SWS_FAST_BILINEAR,
                            nullptr,
@@ -148,14 +288,15 @@ bool FfmpegH264Decoder::decode(const QByteArray& packetData, QImage& outImage) {
     }
 
     m_bgra->format = AV_PIX_FMT_BGRA;
-    m_bgra->width = m_frame->width;
-    m_bgra->height = m_frame->height;
+    m_bgra->width = srcForSws->width;
+    m_bgra->height = srcForSws->height;
     const int bufRc = av_frame_get_buffer(m_bgra, 32);
     if (bufRc < 0) {
       setError(QStringLiteral("av_frame_get_buffer(BGRA) 失败：%1").arg(ffErr(bufRc)));
       return false;
     }
     m_lastSize = sz;
+    m_lastSrcPixFmt = srcFmt;
   }
 
   const int writableRc = av_frame_make_writable(m_bgra);
@@ -164,10 +305,15 @@ bool FfmpegH264Decoder::decode(const QByteArray& packetData, QImage& outImage) {
     return false;
   }
 
-  sws_scale(m_sws, m_frame->data, m_frame->linesize, 0, m_frame->height, m_bgra->data, m_bgra->linesize);
+  sws_scale(m_sws,
+            srcForSws->data,
+            srcForSws->linesize,
+            0,
+            srcForSws->height,
+            m_bgra->data,
+            m_bgra->linesize);
 
   QImage img(m_bgra->data[0], m_bgra->width, m_bgra->height, m_bgra->linesize[0], QImage::Format_ARGB32);
-  outImage = img.copy(); // 复制，避免引用 FFmpeg buffer 生命周期问题
+  outImage = img.copy();
   return true;
 }
-

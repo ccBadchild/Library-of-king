@@ -18,6 +18,7 @@ void VideoDecodeWorker::onVideoFrame(const QSize& logicalSize,
       m_decoder.reset();
       return;
     }
+    emit decodeLog(QStringLiteral("H.264 解码后端：%1").arg(m_decoder->backendDescription()));
   }
 
   QImage img;

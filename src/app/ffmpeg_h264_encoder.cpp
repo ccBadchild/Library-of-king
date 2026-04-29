@@ -10,6 +10,8 @@ extern "C" {
 #include <libswscale/swscale.h>
 }
 
+#include <cstring>
+
 namespace {
 
 QString ffErr(int err) {
@@ -38,91 +40,165 @@ QString FfmpegH264Encoder::lastError() const {
   return m_error;
 }
 
+QString FfmpegH264Encoder::backendDescription() const {
+  return m_backendDesc;
+}
+
 void FfmpegH264Encoder::setError(const QString& text) {
   m_error = text;
 }
 
-bool FfmpegH264Encoder::open(const QSize& size, int fps, int kbps) {
-  close();
-  m_size = size;
-  m_fps = qMax(1, fps);
-  m_frameIndex = 0;
-
-  const AVCodec* codec = avcodec_find_encoder_by_name("libx264");
-  if (!codec) {
-    codec = avcodec_find_encoder(AV_CODEC_ID_H264);
-  }
-  if (!codec) {
-    setError(QStringLiteral("找不到 H.264 编码器（libx264/AV_CODEC_ID_H264）"));
-    return false;
+void FfmpegH264Encoder::applyCodecOptions(AVCodecContext* ctx, const char* codecName) {
+  if (!ctx || !codecName || !ctx->priv_data) {
+    return;
   }
 
-  m_ctx = avcodec_alloc_context3(codec);
-  if (!m_ctx) {
+  if (std::strstr(codecName, "nvenc")) {
+    // FFmpeg NVENC：低延迟 CBR（preset 档位依 FFmpeg/NVIDIA 版本略有差异）
+    av_opt_set(ctx->priv_data, "preset", "p4", 0);
+    av_opt_set(ctx->priv_data, "tune", "ull", 0);
+    av_opt_set(ctx->priv_data, "rc", "cbr", 0);
+    av_opt_set(ctx->priv_data, "delay", "0", 0);
+    av_opt_set(ctx->priv_data, "bf", "0", 0);
+  } else if (std::strstr(codecName, "amf")) {
+    av_opt_set(ctx->priv_data, "usage", "lowlatency", 0);
+    av_opt_set(ctx->priv_data, "quality", "speed", 0);
+    av_opt_set(ctx->priv_data, "preanalysis", "0", 0);
+  } else if (std::strstr(codecName, "qsv")) {
+    av_opt_set(ctx->priv_data, "preset", "veryfast", 0);
+    av_opt_set(ctx->priv_data, "look_ahead", "0", 0);
+    av_opt_set(ctx->priv_data, "async_depth", "1", 0);
+  } else if (std::strstr(codecName, "libx264")) {
+    av_opt_set(ctx->priv_data, "preset", "ultrafast", 0);
+    av_opt_set(ctx->priv_data, "tune", "zerolatency", 0);
+  }
+}
+
+bool FfmpegH264Encoder::tryOpenCodec(const AVCodec* codec,
+                                     const QString& backendLabel,
+                                     const QSize& size,
+                                     int fps,
+                                     int kbps) {
+  AVCodecContext* ctx = avcodec_alloc_context3(codec);
+  if (!ctx) {
     setError(QStringLiteral("avcodec_alloc_context3 失败"));
     return false;
   }
 
-  m_ctx->width = size.width();
-  m_ctx->height = size.height();
-  m_ctx->pix_fmt = AV_PIX_FMT_YUV420P;
-  m_ctx->time_base = AVRational{1, m_fps};
-  m_ctx->framerate = AVRational{m_fps, 1};
-  m_ctx->gop_size = m_fps;       // 约 1 秒一个关键帧
-  m_ctx->max_b_frames = 0;       // 低延迟
-  m_ctx->bit_rate = bitrateFromKbps(kbps);
-  m_ctx->thread_count = 1;       // 延迟优先（避免多线程带来的缓冲）
+  ctx->width = size.width();
+  ctx->height = size.height();
+  ctx->pix_fmt = AV_PIX_FMT_YUV420P;
+  ctx->time_base = AVRational{1, fps};
+  ctx->framerate = AVRational{fps, 1};
+  ctx->gop_size = fps;
+  ctx->max_b_frames = 0;
+  ctx->bit_rate = bitrateFromKbps(kbps);
+  ctx->thread_count = 1;
 
-  // x264 低延迟参数（如果是 libx264 会生效）
-  av_opt_set(m_ctx->priv_data, "preset", "ultrafast", 0);
-  av_opt_set(m_ctx->priv_data, "tune", "zerolatency", 0);
+  applyCodecOptions(ctx, codec->name);
 
-  const int rc = avcodec_open2(m_ctx, codec, nullptr);
-  if (rc < 0) {
-    setError(QStringLiteral("avcodec_open2 失败：%1").arg(ffErr(rc)));
-    close();
+  const int openRc = avcodec_open2(ctx, codec, nullptr);
+  if (openRc < 0) {
+    setError(QStringLiteral("avcodec_open2(%1) 失败：%2").arg(backendLabel).arg(ffErr(openRc)));
+    avcodec_free_context(&ctx);
     return false;
   }
 
-  m_frame = av_frame_alloc();
-  if (!m_frame) {
+  AVFrame* frame = av_frame_alloc();
+  if (!frame) {
     setError(QStringLiteral("av_frame_alloc 失败"));
-    close();
+    avcodec_free_context(&ctx);
     return false;
   }
-  m_frame->format = m_ctx->pix_fmt;
-  m_frame->width = m_ctx->width;
-  m_frame->height = m_ctx->height;
+  frame->format = ctx->pix_fmt;
+  frame->width = ctx->width;
+  frame->height = ctx->height;
 
-  const int bufRc = av_frame_get_buffer(m_frame, 32);
+  const int bufRc = av_frame_get_buffer(frame, 32);
   if (bufRc < 0) {
     setError(QStringLiteral("av_frame_get_buffer 失败：%1").arg(ffErr(bufRc)));
-    close();
+    av_frame_free(&frame);
+    avcodec_free_context(&ctx);
     return false;
   }
 
-  m_sws = sws_getContext(m_ctx->width,
-                         m_ctx->height,
-                         AV_PIX_FMT_BGRA,
-                         m_ctx->width,
-                         m_ctx->height,
-                         AV_PIX_FMT_YUV420P,
-                         SWS_FAST_BILINEAR,
-                         nullptr,
-                         nullptr,
-                         nullptr);
-  if (!m_sws) {
+  SwsContext* sws = sws_getContext(ctx->width,
+                                     ctx->height,
+                                     AV_PIX_FMT_BGRA,
+                                     ctx->width,
+                                     ctx->height,
+                                     static_cast<AVPixelFormat>(ctx->pix_fmt),
+                                     SWS_FAST_BILINEAR,
+                                     nullptr,
+                                     nullptr,
+                                     nullptr);
+  if (!sws) {
     setError(QStringLiteral("sws_getContext 失败"));
-    close();
+    av_frame_free(&frame);
+    avcodec_free_context(&ctx);
     return false;
   }
 
+  m_ctx = ctx;
+  m_frame = frame;
+  m_sws = sws;
+  m_backendDesc = backendLabel;
   m_ready = true;
+  m_error.clear();
   return true;
+}
+
+bool FfmpegH264Encoder::open(const QSize& size, int fps, int kbps) {
+  close();
+  m_error.clear();
+  m_size = size;
+  m_fps = qMax(1, fps);
+  m_frameIndex = 0;
+
+  static const struct {
+    const char* name;
+    const char* label;
+  } kHwEncoders[] = {
+      {"h264_nvenc", "NVENC"},
+      {"h264_amf", "AMF"},
+      {"h264_qsv", "QSV"},
+  };
+
+  for (const auto& h : kHwEncoders) {
+    const AVCodec* codec = avcodec_find_encoder_by_name(h.name);
+    if (!codec) {
+      continue;
+    }
+    if (tryOpenCodec(codec, QString::fromUtf8(h.label), size, m_fps, kbps)) {
+      return true;
+    }
+    // tryOpenCodec 失败时已 setError；清理解码器状态，便于尝试下一种
+    close();
+    m_error.clear();
+  }
+
+  const AVCodec* sw = avcodec_find_encoder_by_name("libx264");
+  if (!sw) {
+    sw = avcodec_find_encoder(AV_CODEC_ID_H264);
+  }
+  if (!sw) {
+    setError(QStringLiteral("找不到可用的 H.264 软件编码器"));
+    return false;
+  }
+
+  QString swLabel = QStringLiteral("software");
+  if (std::strstr(sw->name, "libx264")) {
+    swLabel = QStringLiteral("software (libx264)");
+  } else {
+    swLabel = QStringLiteral("software (%1)").arg(QString::fromUtf8(sw->name));
+  }
+
+  return tryOpenCodec(sw, swLabel, size, m_fps, kbps);
 }
 
 void FfmpegH264Encoder::close() {
   m_ready = false;
+  m_backendDesc.clear();
   if (m_sws) {
     sws_freeContext(m_sws);
     m_sws = nullptr;
@@ -190,4 +266,3 @@ QVector<FfmpegH264Encoder::Packet> FfmpegH264Encoder::encode(const QImage& argb3
 
   return out;
 }
-
