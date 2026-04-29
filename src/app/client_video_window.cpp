@@ -13,6 +13,7 @@
 #include <QGraphicsOpacityEffect>
 #include <QGridLayout>
 #include <QHBoxLayout>
+#include <QIcon>
 #include <QMouseEvent>
 #include <QPropertyAnimation>
 #include <QPushButton>
@@ -53,23 +54,30 @@ ClientVideoWindow::ClientVideoWindow(QWidget* parent)
   m_floatToolbar = new QWidget(body);
   m_floatToolbar->setObjectName(QStringLiteral("videoFloatToolbar"));
   auto* toolbarLayout = new QHBoxLayout(m_floatToolbar);
-  toolbarLayout->setContentsMargins(10, 6, 10, 6);
-  toolbarLayout->setSpacing(8);
+  toolbarLayout->setContentsMargins(12, 8, 12, 8);
+  toolbarLayout->setSpacing(10);
   m_toolbarToggleBtn = new QPushButton(m_floatToolbar);
   m_toolbarToggleBtn->setObjectName(QStringLiteral("videoToolbarToggleBtn"));
   m_toolbarToggleBtn->setCursor(Qt::PointingHandCursor);
-  m_toolbarToggleBtn->setFixedSize(30, 28);
-  m_transferBtn = new QPushButton(QStringLiteral("远程传输"), m_floatToolbar);
+  m_toolbarToggleBtn->setFixedSize(40, 40);
+  m_transferBtn = new QPushButton(m_floatToolbar);
   m_transferBtn->setObjectName(QStringLiteral("videoTransferBtn"));
   m_transferBtn->setCursor(Qt::PointingHandCursor);
   m_fullScreenBtn = new QPushButton(m_floatToolbar);
   m_fullScreenBtn->setObjectName(QStringLiteral("videoFullScreenBtn"));
   m_fullScreenBtn->setCursor(Qt::PointingHandCursor);
+  m_toolbarToggleBtn->setIcon(QIcon(QStringLiteral(":/icons/icon_toolbar_expand.svg")));
+  m_toolbarToggleBtn->setIconSize(QSize(20, 20));
+  m_transferBtn->setIcon(QIcon(QStringLiteral(":/icons/icon_toolbar_transfer.svg")));
+  m_transferBtn->setIconSize(QSize(22, 22));
+  m_transferBtn->setToolTip(QStringLiteral("远程传输"));
+  m_fullScreenBtn->setIcon(QIcon(QStringLiteral(":/icons/icon_toolbar_fullscreen.svg")));
+  m_fullScreenBtn->setIconSize(QSize(22, 22));
   toolbarLayout->addWidget(m_toolbarToggleBtn);
   toolbarLayout->addWidget(m_transferBtn);
   toolbarLayout->addWidget(m_fullScreenBtn);
   m_floatToolbar->setAttribute(Qt::WA_StyledBackground, true);
-  m_floatToolbar->setFixedHeight(42);
+  m_floatToolbar->setFixedHeight(56);
   m_floatToolbar->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Fixed);
   m_floatToolbar->setMouseTracking(true);
   m_floatToolbar->installEventFilter(this);
@@ -220,7 +228,15 @@ void ClientVideoWindow::updateFullScreenButtonText() {
   if (!m_fullScreenBtn) {
     return;
   }
-  m_fullScreenBtn->setText(isFullScreen() ? QStringLiteral("退出全屏") : QStringLiteral("全屏"));
+  if (isFullScreen()) {
+    m_fullScreenBtn->setText(QString());
+    m_fullScreenBtn->setIcon(QIcon(QStringLiteral(":/icons/icon_toolbar_fullscreen_exit.svg")));
+    m_fullScreenBtn->setToolTip(QStringLiteral("退出全屏"));
+  } else {
+    m_fullScreenBtn->setText(QString());
+    m_fullScreenBtn->setIcon(QIcon(QStringLiteral(":/icons/icon_toolbar_fullscreen.svg")));
+    m_fullScreenBtn->setToolTip(QStringLiteral("进入全屏"));
+  }
 }
 
 void ClientVideoWindow::setToolbarExpanded(bool expanded) {
@@ -232,7 +248,9 @@ void ClientVideoWindow::setToolbarExpanded(bool expanded) {
     m_transferBtn->setVisible(expanded);
   }
   if (m_toolbarToggleBtn) {
-    m_toolbarToggleBtn->setText(expanded ? QStringLiteral("˄") : QStringLiteral("˅"));
+    m_toolbarToggleBtn->setText(QString());
+    m_toolbarToggleBtn->setIcon(QIcon(expanded ? QStringLiteral(":/icons/icon_toolbar_collapse.svg")
+                                               : QStringLiteral(":/icons/icon_toolbar_expand.svg")));
     m_toolbarToggleBtn->setToolTip(expanded ? QStringLiteral("收起工具栏") : QStringLiteral("展开工具栏"));
   }
   if (m_autoCollapseTimer) {

@@ -129,7 +129,7 @@ VideoRenderWidget, SoftwareRenderWidget{background:#111;}
 #videoFloatToolbar{
   background:rgba(32,35,43,220);
   border:1px solid #3a3e49;
-  border-radius:8px;
+  border-radius:10px;
 }
 
 #videoToolbarToggleBtn{
@@ -137,9 +137,10 @@ VideoRenderWidget, SoftwareRenderWidget{background:#111;}
   color:#e8e8e8;
   border:none;
   border-radius:6px;
-  padding:4px 8px;
-  font-size:14px;
-  min-width:30px;
+  padding:6px;
+  min-width:40px;
+  max-width:40px;
+  min-height:40px;
 }
 #videoToolbarToggleBtn:hover{background:#2c2f3a;}
 #videoToolbarToggleBtn:pressed{background:#23262e;}
@@ -149,8 +150,11 @@ VideoRenderWidget, SoftwareRenderWidget{background:#111;}
   color:#fff;
   border:none;
   border-radius:6px;
-  padding:6px 14px;
-  min-width:88px;
+  padding:6px;
+  min-width:40px;
+  max-width:40px;
+  min-height:40px;
+  qproperty-iconSize: 22px 22px;
 }
 #videoFullScreenBtn:hover{background:#1d6aea;}
 #videoFullScreenBtn:pressed{background:#1456c8;}
@@ -160,8 +164,11 @@ VideoRenderWidget, SoftwareRenderWidget{background:#111;}
   color:#fff;
   border:none;
   border-radius:6px;
-  padding:6px 14px;
-  min-width:96px;
+  padding:6px;
+  min-width:40px;
+  max-width:40px;
+  min-height:40px;
+  qproperty-iconSize: 22px 22px;
 }
 #videoTransferBtn:hover{background:#1d6aea;}
 #videoTransferBtn:pressed{background:#1456c8;}
@@ -210,6 +217,15 @@ FileTransferDialog{
 }
 #fileTransferSubtleBtn:hover{background:#424756;}
 #fileTransferSubtleBtn:pressed{background:#2b2f3b;}
+
+#fileTransferUploadBtn,#fileTransferDownloadBtn{
+  min-width:44px;
+  max-width:44px;
+  min-height:36px;
+  border-radius:6px;
+  padding:6px;
+  qproperty-iconSize: 22px 22px;
+}
 
 #fileTransferTree,#fileTransferTaskTable{
   background:#171a21;

@@ -277,8 +277,16 @@ void FileTransferDialog::setupUi() {
   toolbar->addWidget(refreshBtn);
   toolbar->addWidget(mkdirBtn);
   toolbar->addStretch(1);
-  m_uploadBtn = new QPushButton(QStringLiteral("上传 ->"), this);
-  m_downloadBtn = new QPushButton(QStringLiteral("<- 下载"), this);
+  m_uploadBtn = new QPushButton(this);
+  m_downloadBtn = new QPushButton(this);
+  m_uploadBtn->setObjectName(QStringLiteral("fileTransferUploadBtn"));
+  m_downloadBtn->setObjectName(QStringLiteral("fileTransferDownloadBtn"));
+  m_uploadBtn->setIcon(QIcon(QStringLiteral(":/icons/icon_upload.svg")));
+  m_uploadBtn->setIconSize(QSize(22, 22));
+  m_uploadBtn->setToolTip(QStringLiteral("上传所选本机文件到远程目录"));
+  m_downloadBtn->setIcon(QIcon(QStringLiteral(":/icons/icon_download.svg")));
+  m_downloadBtn->setIconSize(QSize(22, 22));
+  m_downloadBtn->setToolTip(QStringLiteral("下载所选远程文件到本机目录"));
   toolbar->addWidget(m_uploadBtn);
   toolbar->addWidget(m_downloadBtn);
   root->addLayout(toolbar);

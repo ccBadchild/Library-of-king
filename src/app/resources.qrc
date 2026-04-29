@@ -2,6 +2,13 @@
   <qresource prefix="/">
     <file alias="styles/dark.qss">styles/dark.qss</file>
     <file alias="icons/tray_icon.png">icons/tray_icon.png</file>
+    <file alias="icons/icon_toolbar_transfer.svg">icons/icon_toolbar_transfer.svg</file>
+    <file alias="icons/icon_toolbar_fullscreen.svg">icons/icon_toolbar_fullscreen.svg</file>
+    <file alias="icons/icon_toolbar_fullscreen_exit.svg">icons/icon_toolbar_fullscreen_exit.svg</file>
+    <file alias="icons/icon_toolbar_expand.svg">icons/icon_toolbar_expand.svg</file>
+    <file alias="icons/icon_toolbar_collapse.svg">icons/icon_toolbar_collapse.svg</file>
+    <file alias="icons/icon_upload.svg">icons/icon_upload.svg</file>
+    <file alias="icons/icon_download.svg">icons/icon_download.svg</file>
   </qresource>
 </RCC>
 
