@@ -1,4 +1,5 @@
 QMainWindow{background:#1e1f24;color:#e8e8e8;}
+ClientVideoWindow{background:#1e1f24;color:#e8e8e8;}
 QWidget{color:#e8e8e8;}
 
 TitleBar{background:#20232b;border:1px solid #343846;border-radius:6px;}
@@ -94,18 +95,6 @@ QPushButton{
 QPushButton:hover{background:#1d6aea;}
 QPushButton:pressed{background:#1456c8;}
 QPushButton:disabled{background:#3a3d47;color:#8f95a3;}
-
-#leftPanelToggleBtn{
-  background:#2a2d36;
-  color:#dfe3ea;
-  border:1px solid #3f4350;
-  border-radius:6px;
-  padding:0px;
-  font-size:14px;
-}
-#leftPanelToggleBtn:hover{background:#343846;}
-#leftPanelToggleBtn:pressed{background:#1f222a;}
-#leftPanelToggleBtn:disabled{background:#2a2d36;color:#8f95a3;}
 
 QRadioButton{spacing:6px;}
 QRadioButton:disabled{color:#8f95a3;}

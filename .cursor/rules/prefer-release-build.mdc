@@ -1,0 +1,12 @@
+---
+description: Prefer Release configuration when building this CMake/MSVC project
+alwaysApply: true
+---
+
+# Build configuration
+
+Unless the user explicitly asks for Debug (or another configuration), **compile using Release**:
+
+- Example: `cmake --build build --config Release`
+
+Do **not** assume Debug as the default when running builds or verifying compilation.

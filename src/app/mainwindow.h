@@ -1,8 +1,7 @@
 #pragma once
 
-#include "software_render_widget.h"
-#include "video_render_widget.h"
 #include "client_controller.h"
+#include "client_video_window.h"
 #include "server_controller.h"
 
 #include <QComboBox>
@@ -13,7 +12,6 @@
 #include <QPushButton>
 #include <QRadioButton>
 #include <QSize>
-#include <QStackedWidget>
 #include <QTextEdit>
 #include <QWidget>
 
@@ -28,6 +26,7 @@ private:
   void setupUi();
   void bindEvents();
   void appendLog(const QString& text);
+  void updateControlAvailability();
   void updateWindowSizeByMode(bool isServerMode);
   rdqt::QualityPreset currentPreset() const;
   rdqt::VideoCodec currentCodec() const;
@@ -38,8 +37,6 @@ private:
 
   TitleBar* m_titleBar = nullptr;
   QWidget* m_leftPanel = nullptr;
-  QWidget* m_leftPanelHost = nullptr;
-  QPushButton* m_leftPanelToggleBtn = nullptr;
 
   QRadioButton* m_modeServer = nullptr;
   QRadioButton* m_modeClient = nullptr;
@@ -60,14 +57,12 @@ private:
   QLabel* m_qosServerLabel = nullptr;
   QLabel* m_qosClientLabel = nullptr;
 
-  QGroupBox* m_remoteDesktopBox = nullptr;
-  QStackedWidget* m_renderStack = nullptr;
-  VideoRenderWidget* m_videoWidget = nullptr;
-  SoftwareRenderWidget* m_softwareWidget = nullptr;
+  ClientVideoWindow* m_clientVideoWindow = nullptr;
   QTextEdit* m_logEdit = nullptr;
   QSize m_clientModeSize;
   bool m_clientConnected = false;
+  /** 用户已启动服务端监听（用于禁用重复启动与运行模式切换）。 */
+  bool m_serverRunning = false;
   bool m_remoteControlEnabled = false;
   bool m_isLoopbackTarget = false;
-  bool m_leftPanelCollapsed = false;
 };
