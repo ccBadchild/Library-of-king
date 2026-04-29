@@ -1,3 +1,8 @@
+/**
+ * @file server_controller.cpp
+ * @brief ServerController：串联 TcpServerWorker 与 CaptureWorker，并把 QoS 从捕获线程转到 UI。
+ */
+
 #include "server_controller.h"
 #include "app_logger.h"
 

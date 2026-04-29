@@ -1,3 +1,8 @@
+/**
+ * @file ffmpeg_h264_decoder.cpp
+ * @brief libavcodec 解码 H.264（硬件优先）；ffmpeg_decoder_hw_format 供解码器挑选 HW 像素格式。
+ */
+
 #include "ffmpeg_h264_decoder.h"
 
 extern "C" {
@@ -29,6 +34,9 @@ QString hwTypeLabel(int hwDeviceType) {
 
 } // namespace
 
+/**
+ * FFmpeg 在解码器需要选择硬件像素格式时回调：遍历 pix_fmts，选出与本实例 m_hwPixFmt 一致的一项。
+ */
 extern "C" AVPixelFormat ffmpeg_decoder_hw_format(AVCodecContext* avctx, const AVPixelFormat* pix_fmts) {
   auto* self = static_cast<FfmpegH264Decoder*>(avctx->opaque);
   if (!self) {
@@ -64,6 +72,13 @@ void FfmpegH264Decoder::setError(const QString& text) {
   m_error = text;
 }
 
+/**
+ * 硬件解码路径：
+ * ① avcodec_get_hw_config 枚举编码器支持的 HW config，匹配 device_type 且支持 DEVICE_CTX；
+ * ② av_hwdevice_ctx_create 创建设备句柄；
+ * ③ avcodec_alloc_context3 + hw_device_ctx + get_format + avcodec_open2；
+ * ④ 额外分配 m_swTransfer：用于 av_hwframe_transfer_data 把 GPU 帧拷到内存。
+ */
 bool FfmpegH264Decoder::tryOpenHardware(const AVCodec* codec, int hwDeviceType) {
   const auto type = static_cast<AVHWDeviceType>(hwDeviceType);
 
@@ -101,6 +116,7 @@ bool FfmpegH264Decoder::tryOpenHardware(const AVCodec* codec, int hwDeviceType) 
   m_ctx->hw_device_ctx = av_buffer_ref(hwDev);
   av_buffer_unref(&hwDev);
 
+  // opaque 指向 this，供 ffmpeg_decoder_hw_format 读取 m_hwPixFmt。
   m_ctx->opaque = this;
   m_ctx->get_format = ffmpeg_decoder_hw_format;
   m_ctx->thread_count = 1;
@@ -128,6 +144,7 @@ bool FfmpegH264Decoder::tryOpenHardware(const AVCodec* codec, int hwDeviceType) 
   return true;
 }
 
+/** 软件解码：无 HW device；解码输出通常为 YUV，后续统一 swscale → BGRA。 */
 bool FfmpegH264Decoder::openSoftwareOnly(const AVCodec* codec) {
   m_ctx = avcodec_alloc_context3(codec);
   if (!m_ctx) {
@@ -167,6 +184,7 @@ bool FfmpegH264Decoder::open() {
   }
 
 #ifdef _WIN32
+  // Windows 下依次尝试 D3D11VA、DXVA2；均失败则 openSoftwareOnly。
   const int hwTypes[] = {
       AV_HWDEVICE_TYPE_D3D11VA,
       AV_HWDEVICE_TYPE_DXVA2,
@@ -219,6 +237,7 @@ bool FfmpegH264Decoder::decode(const QByteArray& packetData, QImage& outImage) {
     return false;
   }
 
+  // ① 把 Annex B 字节封装进 AVPacket（一次解码调用对应一块送进解码器的负载）。
   AVPacket* pkt = av_packet_alloc();
   if (!pkt) {
     return false;
@@ -231,6 +250,7 @@ bool FfmpegH264Decoder::decode(const QByteArray& packetData, QImage& outImage) {
   }
   memcpy(pkt->data, packetData.constData(), static_cast<size_t>(packetData.size()));
 
+  // ② send_packet：压缩包入解码器内部缓冲。
   const int sendRc = avcodec_send_packet(m_ctx, pkt);
   av_packet_free(&pkt);
   if (sendRc < 0) {
@@ -238,6 +258,7 @@ bool FfmpegH264Decoder::decode(const QByteArray& packetData, QImage& outImage) {
     return false;
   }
 
+  // ③ receive_frame：取出一帧未压缩图像（可能仍是 HW 表面像素格式）。
   const int recvRc = avcodec_receive_frame(m_ctx, m_frame);
   if (recvRc == AVERROR(EAGAIN) || recvRc == AVERROR_EOF) {
     return false;
@@ -247,6 +268,7 @@ bool FfmpegH264Decoder::decode(const QByteArray& packetData, QImage& outImage) {
     return false;
   }
 
+  // ④ 若为硬件解码：先把帧从 GPU 转到 CPU 可读的 NV12/YUV（m_swTransfer）。
   AVFrame* srcForSws = m_frame;
   if (m_hwDecode) {
     if (!m_swTransfer) {
@@ -267,6 +289,7 @@ bool FfmpegH264Decoder::decode(const QByteArray& packetData, QImage& outImage) {
   }
 
   const AVPixelFormat srcFmt = static_cast<AVPixelFormat>(srcForSws->format);
+  // ⑤ 分辨率或源像素格式变化时重建 SwsContext，并为 m_bgra 分配缓冲区。
   if (m_lastSize != sz || m_lastSrcPixFmt != srcFmt || !m_sws) {
     if (m_sws) {
       sws_freeContext(m_sws);
@@ -305,6 +328,7 @@ bool FfmpegH264Decoder::decode(const QByteArray& packetData, QImage& outImage) {
     return false;
   }
 
+  // ⑥ sws_scale：源平面 → BGRA，写入 m_bgra。
   sws_scale(m_sws,
             srcForSws->data,
             srcForSws->linesize,
@@ -313,6 +337,7 @@ bool FfmpegH264Decoder::decode(const QByteArray& packetData, QImage& outImage) {
             m_bgra->data,
             m_bgra->linesize);
 
+  // ⑦ QImage 包装解码缓冲区（copy）交给调用方，避免 AVFrame 生命周期问题。
   QImage img(m_bgra->data[0], m_bgra->width, m_bgra->height, m_bgra->linesize[0], QImage::Format_ARGB32);
   outImage = img.copy();
   return true;

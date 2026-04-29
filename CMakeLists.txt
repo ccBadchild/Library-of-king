@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
-project(RemoteDesktopQt LANGUAGES CXX)
+# CXX：源码；RC：编译 RemoteControl.rc，将 icons/app.ico 嵌入 exe（资源管理器中显示的图标）。
+project(RemoteDesktopQt LANGUAGES CXX RC)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -20,6 +21,7 @@ endif()
 
 find_package(Qt5 REQUIRED COMPONENTS Widgets Network Gui Core)
 
+# RemoteControl.rc 与图标路径相对于 src/app（见 RC 内 ICON 路径）。
 add_executable(RemoteControl
   src/app/main.cpp
   src/app/app_logger.cpp
@@ -37,6 +39,7 @@ add_executable(RemoteControl
   src/app/capture_worker.cpp
   src/app/tcp_server_worker.cpp
   src/app/tcp_client_worker.cpp
+  src/app/RemoteControl.rc
   src/app/mainwindow.h
   src/app/client_video_window.h
   src/app/title_bar.h

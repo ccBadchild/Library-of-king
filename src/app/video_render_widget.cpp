@@ -1,3 +1,8 @@
+/**
+ * @file video_render_widget.cpp
+ * @brief OpenGL 着色器绘制纹理四边形；输入节流见 mouseMoveEvent（约 8ms）。
+ */
+
 #include "video_render_widget.h"
 
 #include <QOpenGLFunctions>

@@ -1,3 +1,8 @@
+/**
+ * @file mainwindow.cpp
+ * @brief 主窗口实现：界面搭建、信号槽绑定、托盘与远程窗口交互、控件可用状态集中更新。
+ */
+
 #include "mainwindow.h"
 #include "app_logger.h"
 #include "title_bar.h"
@@ -19,25 +24,33 @@
 #include <QSystemTrayIcon>
 #include <QVBoxLayout>
 
+// ---------------------------------------------------------------------------
+// 构造 / 析构
+// ---------------------------------------------------------------------------
+
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
   setupUi();
   bindEvents();
-  // bindEvents 末尾 toggleMode() 已将窗口收窄；此处记录客户端模式下的控制面板尺寸。
+  // toggleMode() 在 bindEvents 末尾已执行一次，窗口宽度可能已从初始值收窄；此处记下用作客户端模式还原参照。
   m_clientModeSize = size();
 }
 
 MainWindow::~MainWindow() {
-  // 远程桌面窗口不使用 MainWindow 作 parent，才能在 Windows 任务栏单独显示按钮。
+  // ClientVideoWindow 构造传入 nullptr，不参与 QObject 父子析构链，必须在主窗口销毁时手动释放。
   delete m_clientVideoWindow;
   m_clientVideoWindow = nullptr;
 }
+
+// ---------------------------------------------------------------------------
+// setupUi：左侧控制面板 + 独立远程窗口（初始隐藏）
+// ---------------------------------------------------------------------------
 
 void MainWindow::setupUi() {
   setWindowTitle(QStringLiteral("远程桌面控制中心"));
   setWindowIcon(QIcon(QStringLiteral(":/icons/tray_icon.png")));
   resize(1300, 820);
 
-  // 去除系统标题栏，使用自定义标题栏。
+  // FramelessWindowHint：去掉系统自带标题栏与边框，由 TitleBar 承担拖拽与最小化/最大化/关闭。
   setWindowFlags(Qt::Window | Qt::FramelessWindowHint);
 
   auto* center = new QWidget(this);
@@ -131,13 +144,19 @@ void MainWindow::setupUi() {
   leftLayout->addWidget(clientBox);
   leftLayout->addWidget(logBox, 1);
 
+  // parent 必须为 nullptr：若挂在 MainWindow 下，Windows 常把该顶层窗口当作附属窗口，任务栏无独立按钮。
   m_clientVideoWindow = new ClientVideoWindow(nullptr);
   m_clientVideoWindow->hide();
 
   root->addWidget(m_leftPanel);
 }
 
+// ---------------------------------------------------------------------------
+// bindEvents：标题栏与托盘、服务端、客户端、画面与输入、模式切换
+// ---------------------------------------------------------------------------
+
 void MainWindow::bindEvents() {
+  // 最小化：hide() 而非 showMinimized()，配合托盘常驻；不在任务栏保留最小化图标（符合「收到托盘」交互）。
   connect(m_titleBar, &TitleBar::minimizeRequested, this, [this]() {
     hide();
   });
@@ -149,10 +168,12 @@ void MainWindow::bindEvents() {
     }
     m_titleBar->setMaximized(isMaximized());
   });
+  // close → closeEvent → quit；Alt+F4 也会走 closeEvent。
   connect(m_titleBar, &TitleBar::closeRequested, this, &MainWindow::close);
 
   setupTrayIcon();
 
+  // 若仍连接远端则弹框确认：同意则 stopConnect 并允许关闭远程窗口；取消则 neither 断开 nor 关闭窗口。
   m_clientVideoWindow->setCloseVerifier([this]() -> bool {
     if (!m_clientConnected) {
       return true;
@@ -175,6 +196,7 @@ void MainWindow::bindEvents() {
 
   connect(m_startServerBtn, &QPushButton::clicked, this, [this]() {
     const quint16 port = m_serverPortEdit->text().toUShort();
+    // 先置位并刷新控件，避免异步监听尚未就绪时用户重复点击启动。
     m_serverRunning = true;
     updateControlAvailability();
     m_serverController.startServer(port);
@@ -212,6 +234,7 @@ void MainWindow::bindEvents() {
       const auto all = QNetworkInterface::allAddresses();
       return all.contains(addr);
     };
+    // 判定连接目标是否为本机（环回或本机网卡 IP），供后续扩展策略（如同机操控时光标等）。
     m_isLoopbackTarget = isLoopbackOrLocal(ip);
 
     appendLog(QStringLiteral("客户端日志文件：%1").arg(applog::filePath(applog::Role::Client)));
@@ -226,11 +249,12 @@ void MainWindow::bindEvents() {
     m_controlModeBtn->setText(checked ? QStringLiteral("可控模式") : QStringLiteral("只看模式"));
   });
 
+  // 解码线程产出帧后主线程刷新 UI：仅更新当前渲染栈页面，减轻 GPU/CPU 双路径重复开销。
   connect(&m_clientController, &ClientController::frameUpdated, this, [this](const QImage& image) {
     if (image.isNull()) {
       return;
     }
-    // 仅更新当前可见的渲染页，避免 OpenGL / 软件 双路径每帧各渲染一次。
+    // StackedWidget 当前页索引与左侧「渲染模式」下拉框一致（0=OpenGL，1=软件）。
     if (m_clientVideoWindow->renderStack()->currentIndex() == 0) {
       m_clientVideoWindow->videoWidget()->setFrameImage(image);
     } else {
@@ -242,6 +266,7 @@ void MainWindow::bindEvents() {
     appendLog(idx == 0 ? QStringLiteral("已切换为 OpenGL 渲染") : QStringLiteral("已切换为软件渲染"));
   });
 
+  // ok=true：链路就绪；ok=false：断开或失败。末尾统一 updateControlAvailability() 刷新连接/断开按钮等。
   connect(&m_clientController, &ClientController::stateChanged, this, [this](bool ok, const QString& reason) {
     m_clientConnected = ok;
     if (ok) {
@@ -286,6 +311,7 @@ void MainWindow::bindEvents() {
             .arg(latencyMs < 0 ? QStringLiteral("-") : QString::number(latencyMs))
             .arg(resolution));
   });
+  // 远程画面控件发出的输入事件统一转发；仅在客户端模式 + 已连接 + 可控模式下生效。
   auto inputHandler = [this](const rdqt::RemoteInputEvent& event) {
     if (!m_modeClient->isChecked() || !m_clientConnected || !m_remoteControlEnabled) {
       return;
@@ -295,6 +321,7 @@ void MainWindow::bindEvents() {
   connect(m_clientVideoWindow->videoWidget(), &VideoRenderWidget::inputEventGenerated, this, inputHandler);
   connect(m_clientVideoWindow->softwareWidget(), &SoftwareRenderWidget::inputEventGenerated, this, inputHandler);
 
+  // 服务端 ⇄ 客户端：切换时收起远程窗口与最大化状态（服务端窄布局不支持最大化）、清空客户端连接标记。
   auto toggleMode = [this]() {
     const bool isServer = m_modeServer->isChecked();
 
@@ -318,12 +345,17 @@ void MainWindow::bindEvents() {
   toggleMode();
 }
 
+// ---------------------------------------------------------------------------
+// 系统托盘：图标、右键菜单、双击还原主窗口
+// ---------------------------------------------------------------------------
+
 void MainWindow::setupTrayIcon() {
   QIcon icon(QStringLiteral(":/icons/tray_icon.png"));
   if (icon.isNull()) {
     icon = style()->standardIcon(QStyle::SP_ComputerIcon);
   }
 
+  // QSystemTrayIcon 父对象为 MainWindow，主窗口销毁时一并删除图标。
   m_trayIcon = new QSystemTrayIcon(icon, this);
   m_trayIcon->setToolTip(QStringLiteral("远程桌面控制中心"));
 
@@ -339,6 +371,7 @@ void MainWindow::setupTrayIcon() {
   connect(quitAct, &QAction::triggered, qApp, &QApplication::quit);
 
   m_trayIcon->setContextMenu(trayMenu);
+  // Windows 下单击常以 Trigger 上报，此处按「双击」还原以免误触弹出主窗口。
   connect(m_trayIcon, &QSystemTrayIcon::activated, this, [this](QSystemTrayIcon::ActivationReason reason) {
     if (reason == QSystemTrayIcon::DoubleClick) {
       show();
@@ -354,9 +387,14 @@ void MainWindow::setupTrayIcon() {
 }
 
 void MainWindow::closeEvent(QCloseEvent* event) {
+  // 与 setQuitOnLastWindowClosed(false) 配合：用户从标题栏关闭主窗时仍应结束进程，而非无声留驻后台。
   Q_UNUSED(event);
   QApplication::quit();
 }
+
+// ---------------------------------------------------------------------------
+// 协议参数：由 UI 下拉框映射到传输层使用的枚举
+// ---------------------------------------------------------------------------
 
 rdqt::QualityPreset MainWindow::currentPreset() const {
   switch (m_qualityBox->currentIndex()) {
@@ -383,6 +421,7 @@ rdqt::VideoCodec MainWindow::currentCodec() const {
 void MainWindow::updateControlAvailability() {
   const bool isServer = m_modeServer->isChecked();
 
+  // 服务端监听未停止前禁止切换「服务端/客户端」，防止双端并发与状态错乱。
   m_modeServer->setEnabled(!m_serverRunning);
   m_modeClient->setEnabled(!m_serverRunning);
 
@@ -398,6 +437,7 @@ void MainWindow::updateControlAvailability() {
   m_renderModeBox->setEnabled(!isServer);
   m_connectBtn->setEnabled(!isServer && !m_clientConnected);
   m_disconnectBtn->setEnabled(!isServer && m_clientConnected);
+  // 未连接成功时无可控/只看语义，控件置灰由 isServer 与 m_clientConnected 共同决定。
   m_controlModeBtn->setEnabled(!isServer && m_clientConnected);
 }
 
@@ -405,6 +445,10 @@ void MainWindow::appendLog(const QString& text) {
   const QString ts = QDateTime::currentDateTime().toString("HH:mm:ss");
   m_logEdit->append(QStringLiteral("[%1] %2").arg(ts, text));
 }
+
+// ---------------------------------------------------------------------------
+// 窗口尺寸策略：服务端固定窄宽；客户端为左侧面板宽度（画面在 ClientVideoWindow）
+// ---------------------------------------------------------------------------
 
 void MainWindow::updateWindowSizeByMode(bool isServerMode) {
   if (isServerMode) {

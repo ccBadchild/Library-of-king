@@ -1,3 +1,8 @@
+/**
+ * @file app_logger.cpp
+ * @brief applog 命名空间实现：互斥锁保护写文件，一行一条记录。
+ */
+
 #include "app_logger.h"
 
 #include <QCoreApplication>
@@ -11,6 +16,7 @@
 namespace applog {
 namespace {
 
+/** 全局互斥：write() 可能在多个 QObject 连接的槽中并发触发，必须串行化写同一文件。 */
 QMutex g_logMutex;
 
 QString roleName(Role role) {

@@ -1,3 +1,8 @@
+/**
+ * @file video_decode_worker.cpp
+ * @brief H.264 NAL 解码入口：惰性初始化解码器，失败通过 decodeLog 反馈 UI。
+ */
+
 #include "video_decode_worker.h"
 #include "ffmpeg_h264_decoder.h"
 

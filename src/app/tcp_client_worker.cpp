@@ -1,3 +1,8 @@
+/**
+ * @file tcp_client_worker.cpp
+ * @brief TcpClientWorker：同步 connect + Hello，异步 onReadyRead 解析帧类型并发射对应信号。
+ */
+
 #include "tcp_client_worker.h"
 
 #include <QBuffer>

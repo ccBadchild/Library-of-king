@@ -1,3 +1,8 @@
+/**
+ * @file software_render_widget.cpp
+ * @brief QPainter 居中缩放绘制帧；无 GL 上下文依赖，兼容性路径。
+ */
+
 #include "software_render_widget.h"
 
 #include <QKeyEvent>

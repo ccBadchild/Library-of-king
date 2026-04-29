@@ -1,5 +1,10 @@
 #pragma once
 
+/**
+ * @file video_render_widget.h
+ * @brief QOpenGLWidget 路径渲染远端画面：纹理上传 + 全屏三角形绘制；并把鼠标键盘映射为 RemoteInputEvent。
+ */
+
 #include "protocol_qt.h"
 
 #include <QImage>
@@ -11,7 +16,12 @@
 #include <QElapsedTimer>
 #include <QSize>
 
-// 使用 QOpenGLWidget 承载视频绘制，减少 QLabel/QPixmap 频繁拷贝带来的开销。
+/**
+ * @class VideoRenderWidget
+ * @brief setFrameImage 可能在解码线程调用：内部 pendingFrame + mutex，paintGL 中上传纹理。
+ *
+ * 鼠标坐标转换为「画面矩形内相对坐标」再映射到 0–65535（与远端桌面注入约定一致）。
+ */
 class VideoRenderWidget : public QOpenGLWidget {
   Q_OBJECT
 public:
@@ -52,5 +62,6 @@ private:
   bool m_hasPendingUpload = false;
   QRect m_drawRect;
   QElapsedTimer m_inputTimer;
+  /** 鼠标移动事件节流（毫秒）。 */
   qint64 m_lastMouseMoveSendMs = 0;
 };

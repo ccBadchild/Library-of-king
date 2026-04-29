@@ -1,0 +1,2 @@
+// Windows 可执行文件图标资源（任务栏 / 资源管理器显示的 exe 图标）
+IDI_ICON1 ICON "icons/app.ico"

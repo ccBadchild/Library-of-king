@@ -1,3 +1,8 @@
+/**
+ * @file tcp_server_worker.cpp
+ * @brief TcpServerWorker：监听、Hello 校验、Ping/Pong、SendInput；匿名命名空间内为 Win32 鼠标标志映射。
+ */
+
 #include "tcp_server_worker.h"
 
 #include <QDataStream>
@@ -5,6 +10,7 @@
 
 namespace {
 
+/** Qt::MouseButton 掩码 → MOUSEEVENTF_*，用于 SendInput。 */
 DWORD mouseFlagFromButton(qint32 button, bool down) {
   if (button & Qt::LeftButton) {
     return down ? MOUSEEVENTF_LEFTDOWN : MOUSEEVENTF_LEFTUP;
@@ -18,6 +24,7 @@ DWORD mouseFlagFromButton(qint32 button, bool down) {
   return 0;
 }
 
+/** Auto：低清偏向 JPEG，其余偏向 H.264（与服务端带宽策略一致）。 */
 rdqt::VideoCodec resolveCodec(rdqt::VideoCodec requested, rdqt::QualityPreset preset) {
   if (requested == rdqt::VideoCodec::H264 || requested == rdqt::VideoCodec::Jpeg) {
     return requested;

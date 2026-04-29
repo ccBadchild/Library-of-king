@@ -1,3 +1,8 @@
+/**
+ * @file client_controller.cpp
+ * @brief ClientController 实现：双线程 worker、QoS/Ping 定时器、JPEG 补丁合并与重连策略。
+ */
+
 #include "client_controller.h"
 #include "app_logger.h"
 #include "video_decode_worker.h"
@@ -6,6 +11,10 @@
 #include <QDateTime>
 #include <QMetaObject>
 #include <QPainter>
+
+// ----------------------------------------------------------------------------
+// 构造：创建 worker、搬迁至线程、连接日志/QoS/解码链路；线程最后在析构里 quit+wait。
+// ----------------------------------------------------------------------------
 
 ClientController::ClientController(QObject* parent) : QObject(parent) {
   m_worker = new TcpClientWorker();
@@ -115,6 +124,7 @@ ClientController::ClientController(QObject* parent) : QObject(parent) {
   m_networkThread.start();
 }
 
+// 析构顺序：先发停止连接 → 断开跨线程 decode 槽 → 停解码线程再停网络线程（避免仍在投递帧）。
 ClientController::~ClientController() {
   stopConnect();
 
@@ -127,6 +137,7 @@ ClientController::~ClientController() {
   m_networkThread.wait();
 }
 
+// startConnect：清空上一帧图像并重置 QoS 文案；实际 TCP 握身在 worker 线程。
 void ClientController::startConnect(const QString& ip,
                                     quint16 port,
                                     const QString& code,
@@ -168,6 +179,7 @@ void ClientController::sendRemoteInput(const rdqt::RemoteInputEvent& event) {
       m_worker, [this, event]() { m_worker->sendInputEvent(event); }, Qt::QueuedConnection);
 }
 
+// 将 JPEG 小块解码后绘制到当前完整帧对应矩形区域。
 void ClientController::applyPatches(const QVector<rdqt::PatchBlock>& patches) {
   if (m_currentFrame.isNull()) {
     applog::write(applog::Role::Client, QStringLiteral("忽略补丁帧：当前尚未收到整帧"));

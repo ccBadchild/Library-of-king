@@ -1,5 +1,10 @@
 #pragma once
 
+/**
+ * @file software_render_widget.h
+ * @brief QWidget + QPainter 软件渲染远端画面（无需 OpenGL）；交互逻辑与 VideoRenderWidget 对齐。
+ */
+
 #include "protocol_qt.h"
 
 #include <QImage>
@@ -7,6 +12,10 @@
 #include <QElapsedTimer>
 #include <QWidget>
 
+/**
+ * @class SoftwareRenderWidget
+ * @brief paintEvent 中按比例缩放居中绘制；输入坐标换算方式与 OpenGL 版本一致。
+ */
 class SoftwareRenderWidget : public QWidget {
   Q_OBJECT
 public:

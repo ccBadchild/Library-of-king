@@ -1,3 +1,8 @@
+/**
+ * @file client_video_window.cpp
+ * @brief ClientVideoWindow 布局与标题栏行为、关闭校验、窗口状态同步。
+ */
+
 #include "client_video_window.h"
 #include "software_render_widget.h"
 #include "title_bar.h"
@@ -13,6 +18,7 @@ ClientVideoWindow::ClientVideoWindow(QWidget* parent)
   resize(1280, 720);
   setMinimumSize(640, 480);
 
+  // 外层边距与主窗 centralWidget 一致（8px），便于共用 dark.qss 观感。
   auto* outer = new QVBoxLayout(this);
   outer->setContentsMargins(8, 8, 8, 8);
   outer->setSpacing(8);
@@ -39,6 +45,7 @@ ClientVideoWindow::ClientVideoWindow(QWidget* parent)
   bodyLayout->addWidget(m_renderStack, 1);
   outer->addWidget(body, 1);
 
+  // 此处最小化仍为系统最小化（远程窗一般不隐藏到托盘，由任务栏恢复）。
   connect(m_titleBar, &TitleBar::minimizeRequested, this, &ClientVideoWindow::showMinimized);
   connect(m_titleBar, &TitleBar::maximizeRestoreRequested, this, [this]() {
     if (isMaximized()) {
@@ -71,4 +78,3 @@ void ClientVideoWindow::changeEvent(QEvent* event) {
     m_titleBar->setMaximized(isMaximized());
   }
 }
-

@@ -1,3 +1,8 @@
+/**
+ * @file title_bar.cpp
+ * @brief TitleBar 构造函数与拖拽逻辑（最大化状态下拖拽会先触发还原）。
+ */
+
 #include "title_bar.h"
 
 #include <QApplication>
