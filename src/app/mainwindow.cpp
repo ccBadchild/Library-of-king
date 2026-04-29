@@ -2,14 +2,21 @@
 #include "app_logger.h"
 #include "title_bar.h"
 
+#include <QAction>
+#include <QApplication>
+#include <QCloseEvent>
 #include <QDateTime>
+#include <QIcon>
 #include <QFormLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QHostAddress>
 #include <QLabel>
+#include <QMenu>
 #include <QMessageBox>
 #include <QNetworkInterface>
+#include <QStyle>
+#include <QSystemTrayIcon>
 #include <QVBoxLayout>
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
@@ -19,8 +26,15 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
   m_clientModeSize = size();
 }
 
+MainWindow::~MainWindow() {
+  // 远程桌面窗口不使用 MainWindow 作 parent，才能在 Windows 任务栏单独显示按钮。
+  delete m_clientVideoWindow;
+  m_clientVideoWindow = nullptr;
+}
+
 void MainWindow::setupUi() {
   setWindowTitle(QStringLiteral("远程桌面控制中心"));
+  setWindowIcon(QIcon(QStringLiteral(":/icons/tray_icon.png")));
   resize(1300, 820);
 
   // 去除系统标题栏，使用自定义标题栏。
@@ -117,14 +131,16 @@ void MainWindow::setupUi() {
   leftLayout->addWidget(clientBox);
   leftLayout->addWidget(logBox, 1);
 
-  m_clientVideoWindow = new ClientVideoWindow(this);
+  m_clientVideoWindow = new ClientVideoWindow(nullptr);
   m_clientVideoWindow->hide();
 
   root->addWidget(m_leftPanel);
 }
 
 void MainWindow::bindEvents() {
-  connect(m_titleBar, &TitleBar::minimizeRequested, this, [this]() { showMinimized(); });
+  connect(m_titleBar, &TitleBar::minimizeRequested, this, [this]() {
+    hide();
+  });
   connect(m_titleBar, &TitleBar::maximizeRestoreRequested, this, [this]() {
     if (isMaximized()) {
       showNormal();
@@ -133,7 +149,9 @@ void MainWindow::bindEvents() {
     }
     m_titleBar->setMaximized(isMaximized());
   });
-  connect(m_titleBar, &TitleBar::closeRequested, this, [this]() { close(); });
+  connect(m_titleBar, &TitleBar::closeRequested, this, &MainWindow::close);
+
+  setupTrayIcon();
 
   m_clientVideoWindow->setCloseVerifier([this]() -> bool {
     if (!m_clientConnected) {
@@ -298,6 +316,46 @@ void MainWindow::bindEvents() {
   };
   connect(m_modeServer, &QRadioButton::toggled, this, [toggleMode]() { toggleMode(); });
   toggleMode();
+}
+
+void MainWindow::setupTrayIcon() {
+  QIcon icon(QStringLiteral(":/icons/tray_icon.png"));
+  if (icon.isNull()) {
+    icon = style()->standardIcon(QStyle::SP_ComputerIcon);
+  }
+
+  m_trayIcon = new QSystemTrayIcon(icon, this);
+  m_trayIcon->setToolTip(QStringLiteral("远程桌面控制中心"));
+
+  auto* trayMenu = new QMenu(this);
+  QAction* showAct = trayMenu->addAction(QStringLiteral("显示控制中心"));
+  connect(showAct, &QAction::triggered, this, [this]() {
+    show();
+    raise();
+    activateWindow();
+  });
+  trayMenu->addSeparator();
+  QAction* quitAct = trayMenu->addAction(QStringLiteral("退出"));
+  connect(quitAct, &QAction::triggered, qApp, &QApplication::quit);
+
+  m_trayIcon->setContextMenu(trayMenu);
+  connect(m_trayIcon, &QSystemTrayIcon::activated, this, [this](QSystemTrayIcon::ActivationReason reason) {
+    if (reason == QSystemTrayIcon::DoubleClick) {
+      show();
+      raise();
+      activateWindow();
+    }
+  });
+
+  if (!QSystemTrayIcon::isSystemTrayAvailable()) {
+    appendLog(QStringLiteral("提示：当前环境无法使用系统托盘，隐藏主窗口后若需退出请使用任务管理器。"));
+  }
+  m_trayIcon->show();
+}
+
+void MainWindow::closeEvent(QCloseEvent* event) {
+  Q_UNUSED(event);
+  QApplication::quit();
 }
 
 rdqt::QualityPreset MainWindow::currentPreset() const {

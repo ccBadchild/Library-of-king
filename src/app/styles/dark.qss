@@ -114,5 +114,15 @@ QMessageBox QPushButton:hover{background:#1d6aea;}
 QMessageBox QPushButton:pressed{background:#1456c8;}
 QMessageBox QPushButton:disabled{background:#3a3d47;color:#8f95a3;}
 
+QMenu{
+  background:#262a33;
+  color:#e8e8e8;
+  border:1px solid #3f4350;
+  padding:4px;
+}
+QMenu::item{padding:8px 28px;}
+QMenu::item:selected{background:#2d7dff;color:#ffffff;}
+QMenu::separator{height:1px;background:#3f4350;margin:4px 8px;}
+
 VideoRenderWidget, SoftwareRenderWidget{background:#111;}
 

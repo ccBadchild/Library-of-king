@@ -18,6 +18,9 @@ int main(int argc, char* argv[]) {
     app.setStyleSheet(QString::fromUtf8(qssFile.readAll()));
   }
 
+  // 主窗口可最小化到托盘隐藏；需在最后一个窗口关闭后仍能常驻托盘。
+  app.setQuitOnLastWindowClosed(false);
+
   MainWindow w;
   w.show();
   return app.exec();

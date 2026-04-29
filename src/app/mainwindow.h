@@ -4,6 +4,7 @@
 #include "client_video_window.h"
 #include "server_controller.h"
 
+#include <QCloseEvent>
 #include <QComboBox>
 #include <QGroupBox>
 #include <QLabel>
@@ -16,17 +17,23 @@
 #include <QWidget>
 
 class TitleBar;
+class QSystemTrayIcon;
 
 class MainWindow : public QMainWindow {
   Q_OBJECT
 public:
   explicit MainWindow(QWidget* parent = nullptr);
+  ~MainWindow() override;
+
+protected:
+  void closeEvent(QCloseEvent* event) override;
 
 private:
   void setupUi();
   void bindEvents();
   void appendLog(const QString& text);
   void updateControlAvailability();
+  void setupTrayIcon();
   void updateWindowSizeByMode(bool isServerMode);
   rdqt::QualityPreset currentPreset() const;
   rdqt::VideoCodec currentCodec() const;
@@ -58,6 +65,7 @@ private:
   QLabel* m_qosClientLabel = nullptr;
 
   ClientVideoWindow* m_clientVideoWindow = nullptr;
+  QSystemTrayIcon* m_trayIcon = nullptr;
   QTextEdit* m_logEdit = nullptr;
   QSize m_clientModeSize;
   bool m_clientConnected = false;
